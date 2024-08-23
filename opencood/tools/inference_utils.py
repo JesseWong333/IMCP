@@ -45,7 +45,33 @@ def inference_late_fusion(batch_data, model, dataset):
                     "gt_box_tensor" : gt_box_tensor}
     return return_dict
 
+def inference_no_fusion_with_id(batch_data, model, dataset, cav_id):
+    output_dict = OrderedDict()
+    output_dict[cav_id] = model(batch_data)
+    transformation_matrix_torch = \
+            torch.from_numpy(np.identity(4)).float().cuda()
+    transformation_matrix_clean_torch = \
+        torch.from_numpy(np.identity(4)).float().cuda()
+    
+    batch_data[cav_id].update({
+            'transformation_matrix':
+            transformation_matrix_torch,
+            'transformation_matrix_clean':
+            transformation_matrix_clean_torch})
+    tmp_data = batch_data[cav_id].copy()
+    for key in tmp_data.keys():
+        if key.endswith('_single'):
+            batch_data[cav_id][key.replace('_single', '')] = batch_data[cav_id][key]
 
+    pred_box_tensor, pred_score, gt_box_tensor = \
+        dataset.post_process({cav_id: batch_data[cav_id]},
+                            output_dict)
+    return_dict = {"pred_box_tensor" : pred_box_tensor, \
+                    "pred_score" : pred_score, \
+                    "gt_box_tensor" : gt_box_tensor}
+    # if "depth_items" in output_dict['ego']:
+    #     return_dict.update({"depth_items" : output_dict['ego']['depth_items']})
+    return return_dict
 
 def inference_no_fusion(batch_data, model, dataset, single_gt=False):
     """
@@ -136,19 +162,19 @@ def inference_early_fusion(batch_data, model, dataset):
     gt_box_tensor : torch.Tensor
         The tensor of gt bounding box.
     """
+  
     output_dict = OrderedDict()
-    cav_content = batch_data['ego']
-    output_dict['ego'] = model(cav_content)
+    output_dict['ego'] = model(batch_data)
     
     pred_box_tensor, pred_score, gt_box_tensor = \
-        dataset.post_process(batch_data,
-                             output_dict)
+        dataset.post_process({'ego': batch_data['ego']},
+                            output_dict)
     
     return_dict = {"pred_box_tensor" : pred_box_tensor, \
                     "pred_score" : pred_score, \
                     "gt_box_tensor" : gt_box_tensor}
-    if "depth_items" in output_dict['ego']:
-        return_dict.update({"depth_items" : output_dict['ego']['depth_items']})
+    # if "depth_items" in output_dict['ego']:
+    #     return_dict.update({"depth_items" : output_dict['ego']['depth_items']})
     return return_dict
 
 

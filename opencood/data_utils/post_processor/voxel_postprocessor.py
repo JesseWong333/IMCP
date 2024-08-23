@@ -314,29 +314,29 @@ class VoxelPostprocessor(BasePostprocessor):
             scores = torch.masked_select(prob[0], mask[0])
 
             # adding dir classifier
-            if 'dir_preds' in output_dict[cav_id].keys() and len(boxes3d) !=0:
-                dir_offset = self.params['dir_args']['dir_offset']
-                num_bins = self.params['dir_args']['num_bins']
+            # if 'dir_preds' in output_dict[cav_id].keys() and len(boxes3d) !=0:
+            #     dir_offset = self.params['dir_args']['dir_offset']
+            #     num_bins = self.params['dir_args']['num_bins']
 
 
-                dm  = output_dict[cav_id]['dir_preds'] # [N, H, W, 4]
-                dir_cls_preds = dm.permute(0, 2, 3, 1).contiguous().reshape(1, -1, num_bins) # [1, N*H*W*2, 2]
-                dir_cls_preds = dir_cls_preds[mask]
-                # if rot_gt > 0, then the label is 1, then the regression target is [0, 1]
-                dir_labels = torch.max(dir_cls_preds, dim=-1)[1]  # indices. shape [1, N*H*W*2].  value 0 or 1. If value is 1, then rot_gt > 0
+            #     dm  = output_dict[cav_id]['dir_preds'] # [N, H, W, 4]
+            #     dir_cls_preds = dm.permute(0, 2, 3, 1).contiguous().reshape(1, -1, num_bins) # [1, N*H*W*2, 2]
+            #     dir_cls_preds = dir_cls_preds[mask]
+            #     # if rot_gt > 0, then the label is 1, then the regression target is [0, 1]
+            #     dir_labels = torch.max(dir_cls_preds, dim=-1)[1]  # indices. shape [1, N*H*W*2].  value 0 or 1. If value is 1, then rot_gt > 0
                 
-                period = (2 * np.pi / num_bins) # pi
-                dir_rot = limit_period(
-                    boxes3d[..., 6] - dir_offset, 0, period
-                ) # 限制在0到pi之间
-                boxes3d[..., 6] = dir_rot + dir_offset + period * dir_labels.to(dir_cls_preds.dtype) # 转化0.25pi到2.5pi
-                boxes3d[..., 6] = limit_period(boxes3d[..., 6], 0.5, 2 * np.pi) # limit to [-pi, pi]
+            #     period = (2 * np.pi / num_bins) # pi
+            #     dir_rot = limit_period(
+            #         boxes3d[..., 6] - dir_offset, 0, period
+            #     ) # 限制在0到pi之间
+            #     boxes3d[..., 6] = dir_rot + dir_offset + period * dir_labels.to(dir_cls_preds.dtype) # 转化0.25pi到2.5pi
+            #     boxes3d[..., 6] = limit_period(boxes3d[..., 6], 0.5, 2 * np.pi) # limit to [-pi, pi]
 
-            if 'iou_preds' in output_dict[cav_id].keys() and len(boxes3d) != 0:
-                iou = torch.sigmoid(output_dict[cav_id]['iou_preds'].permute(0, 2, 3, 1).contiguous()).reshape(1, -1)
-                iou = torch.clamp(iou, min=0.0, max=1.0)
-                iou = (iou + 1) * 0.5
-                scores = scores * torch.pow(iou.masked_select(mask), 4)
+            # if 'iou_preds' in output_dict[cav_id].keys() and len(boxes3d) != 0:
+            #     iou = torch.sigmoid(output_dict[cav_id]['iou_preds'].permute(0, 2, 3, 1).contiguous()).reshape(1, -1)
+            #     iou = torch.clamp(iou, min=0.0, max=1.0)
+            #     iou = (iou + 1) * 0.5
+            #     scores = scores * torch.pow(iou.masked_select(mask), 4)
 
             # convert output to bounding box
             if len(boxes3d) != 0:

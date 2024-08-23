@@ -44,10 +44,10 @@ def load_yaml(file, opt=None):
         list(u'-+0123456789.'))
     param = yaml.load(stream, Loader=loader)
     if "yaml_parser" in param:
-        param = eval(param["yaml_parser"])(param)
+        for yaml_parser in param["yaml_parser"]:
+            param = eval(yaml_parser)(param)
 
     return param
-
 
 def load_voxel_params(param):
     """
@@ -109,16 +109,16 @@ def load_point_pillar_params(param):
     param : dict
         Modified parameter dictionary with new attribute.
     """
-    cav_lidar_range = param['preprocess']['cav_lidar_range']
-    voxel_size = param['preprocess']['args']['voxel_size']
+    cav_lidar_range = param['point_pillar']['preprocess']['cav_lidar_range']
+    voxel_size = param['point_pillar']['preprocess']['args']['voxel_size']
 
     grid_size = (np.array(cav_lidar_range[3:6]) - np.array(
         cav_lidar_range[0:3])) / \
                 np.array(voxel_size)
     grid_size = np.round(grid_size).astype(np.int64)
-    param['model']['args']['point_pillar_scatter']['grid_size'] = grid_size
+    param['model']['args']['point_pillar']['point_pillar_scatter']['grid_size'] = grid_size
 
-    anchor_args = param['postprocess']['anchor_args']
+    anchor_args = param['point_pillar']['postprocess']['anchor_args']
 
     vw = voxel_size[0]
     vh = voxel_size[1]
@@ -132,7 +132,7 @@ def load_point_pillar_params(param):
     anchor_args['H'] = math.ceil((cav_lidar_range[4] - cav_lidar_range[1]) / vh) # H is image height
     anchor_args['D'] = math.ceil((cav_lidar_range[5] - cav_lidar_range[2]) / vd)
 
-    param['postprocess'].update({'anchor_args': anchor_args})
+    param['point_pillar']['postprocess'].update({'anchor_args': anchor_args})
 
     return param
 
@@ -152,16 +152,16 @@ def load_second_params(param):
     param : dict
         Modified parameter dictionary with new attribute.
     """
-    cav_lidar_range = param['preprocess']['cav_lidar_range']
-    voxel_size = param['preprocess']['args']['voxel_size']
+    cav_lidar_range = param['second']['preprocess']['cav_lidar_range']
+    voxel_size = param['second']['preprocess']['args']['voxel_size']
 
     grid_size = (np.array(cav_lidar_range[3:6]) - np.array(
         cav_lidar_range[0:3])) / \
                 np.array(voxel_size)
     grid_size = np.round(grid_size).astype(np.int64)
-    param['model']['args']['grid_size'] = grid_size
+    param['model']['args']['second']['grid_size'] = grid_size
 
-    anchor_args = param['postprocess']['anchor_args']
+    anchor_args = param['second']['postprocess']['anchor_args']
 
     vw = voxel_size[0]
     vh = voxel_size[1]
@@ -171,11 +171,11 @@ def load_second_params(param):
     anchor_args['vh'] = vh
     anchor_args['vd'] = vd
 
-    anchor_args['W'] = int((cav_lidar_range[3] - cav_lidar_range[0]) / vw)
-    anchor_args['H'] = int((cav_lidar_range[4] - cav_lidar_range[1]) / vh)
-    anchor_args['D'] = int((cav_lidar_range[5] - cav_lidar_range[2]) / vd)
+    anchor_args['W'] = round((cav_lidar_range[3] - cav_lidar_range[0]) / vw)
+    anchor_args['H'] = round((cav_lidar_range[4] - cav_lidar_range[1]) / vh)
+    anchor_args['D'] = round((cav_lidar_range[5] - cav_lidar_range[2]) / vd)
 
-    param['postprocess'].update({'anchor_args': anchor_args})
+    param['second']['postprocess'].update({'anchor_args': anchor_args})
 
     return param
 
@@ -307,15 +307,15 @@ def load_lift_splat_shoot_params(param):
     param : dict
         Modified parameter dictionary with new attribute.
     """
-    cav_lidar_range = param['preprocess']['cav_lidar_range']
-    voxel_size = param['preprocess']['args']['voxel_size']
+    cav_lidar_range = param['lss']['preprocess']['cav_lidar_range']
+    voxel_size = param['lss']['preprocess']['args']['voxel_size']
 
     grid_size = (np.array(cav_lidar_range[3:6]) - np.array(
         cav_lidar_range[0:3])) / \
                 np.array(voxel_size)
     grid_size = np.round(grid_size).astype(np.int64)
     
-    anchor_args = param['postprocess']['anchor_args']
+    anchor_args = param['lss']['postprocess']['anchor_args']
 
     vw = voxel_size[0]
     vh = voxel_size[1]
@@ -329,7 +329,7 @@ def load_lift_splat_shoot_params(param):
     anchor_args['H'] = math.ceil((cav_lidar_range[4] - cav_lidar_range[1]) / vh) # H is image height
     anchor_args['D'] = math.ceil((cav_lidar_range[5] - cav_lidar_range[2]) / vd)
 
-    param['postprocess'].update({'anchor_args': anchor_args})
+    param['lss']['postprocess'].update({'anchor_args': anchor_args})
 
     return param
 

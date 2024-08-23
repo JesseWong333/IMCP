@@ -1,0 +1,42 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python Debugger: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "env":{
+                "CUDA_VISIBLE_DEVICES": "1",
+                // "CUDA_LAUNCH_BLOCKING": "1",
+                "DISPLAY": ":1.0"
+            },
+            "justMyCode": false,
+            // "args": [
+            //     "--hypes_yaml", 
+            //     "./opencood/hypes_yaml/dairv2x/pointpillar_deformable_attn_coop_extend_lss.yaml"
+            // ]
+
+            // eval 
+            "args": [
+                // "--model_dir", "./opencood/logs/point_pillar_point_pillar_train_all_test_2024_07_30_22_52_07",
+                // "--fusion_method", "intermediate"
+                // "--model_dir", "./opencood/logs/v_point_pillar_2024_08_01_17_43_01",
+                // "--fusion_method", "single_w_id"
+                // "--model_dir", "./opencood/logs/i_point_pillar_2024_08_01_17_41_50",
+                // "--fusion_method", "single_w_id"
+                //  "--model_dir", "./opencood/logs/i_second_2024_08_01_21_49_26",
+                // "--fusion_method", "single_w_id"
+                //  "--model_dir", "./opencood/logs/i_second_100_252_2024_08_02_21_08_47",
+                // "--fusion_method", "single_w_id"
+                 "--model_dir", "./opencood/logs/pointpillar_lss_lora_32_64_adapter_3_2024_08_18_19_42_07",
+                "--fusion_method", "intermediate"
+            ]
+        
+        }
+    ]
+}

@@ -121,7 +121,7 @@ class BaseBEVBackbone(nn.Module):
 
         data_dict['spatial_features_2d'] = x # [N,C,100,352]
 
-        return data_dict
+        return data_dict, ret_dict
 
 
     def get_multiscale_feature(self, spatial_features):

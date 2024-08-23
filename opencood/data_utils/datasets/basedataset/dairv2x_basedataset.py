@@ -25,9 +25,21 @@ class DAIRV2XBaseDataset(Dataset):
         self.visualize = visualize
         self.train = train
 
-        self.pre_processor = build_preprocessor(params["preprocess"], train)
-        self.post_processor = build_postprocessor(params["postprocess"], train)
-        self.post_processor.generate_gt_bbx = self.post_processor.generate_gt_bbx_by_iou
+        self.pre_processor_i = build_preprocessor(params[params['method_i']]["preprocess"], train)
+        self.pre_processor_v = build_preprocessor(params[params['method_v']]["preprocess"], train)
+
+        self.post_processor_i = build_postprocessor(params[params['method_i']]["postprocess"], train)
+        self.post_processor_v = build_postprocessor(params[params['method_v']]["postprocess"], train)
+
+        self.pre_processor = self.pre_processor_v
+        self.post_processor = self.post_processor_v
+
+        # self.pre_processor = build_preprocessor(params["preprocess"], train)
+        # self.post_processor = build_postprocessor(params["postprocess"], train)
+
+        self.post_processor_i.generate_gt_bbx = self.post_processor_i.generate_gt_bbx_by_iou
+        self.post_processor_v.generate_gt_bbx = self.post_processor_v.generate_gt_bbx_by_iou
+
         self.data_augmentor = DataAugmentor(params['data_augment'],
                                             train)
 
@@ -52,7 +64,7 @@ class DAIRV2XBaseDataset(Dataset):
                                                     else self.generate_object_center_camera
 
         if self.load_camera_file:
-            self.data_aug_conf = params["fusion"]["args"]["data_aug_conf"]
+            self.data_aug_conf = params["camera_data_aug_conf"]
 
         if self.train:
             split_dir = params['root_dir']
@@ -71,7 +83,7 @@ class DAIRV2XBaseDataset(Dataset):
         if "noise_setting" not in self.params:
             self.params['noise_setting'] = OrderedDict()
             self.params['noise_setting']['add_noise'] = False
-    
+        
     def reinitialize(self):
         pass
 
@@ -103,6 +115,8 @@ class DAIRV2XBaseDataset(Dataset):
 
         data[0]['params'] = OrderedDict()
         data[1]['params'] = OrderedDict()
+
+        
         
         # pose of agent 
         lidar_to_novatel = read_json(os.path.join(self.root_dir,'vehicle-side/calib/lidar_to_novatel/'+str(veh_frame_id)+'.json'))
@@ -152,9 +166,7 @@ class DAIRV2XBaseDataset(Dataset):
         data[1]['params']['vehicles_single_all'] = read_json(os.path.join(self.root_dir, \
                                 'infrastructure-side/label/virtuallidar/{}.json'.format(inf_frame_id)))
 
-
         return data
-
 
     def __len__(self):
         return len(self.split_info)
@@ -203,8 +215,7 @@ class DAIRV2XBaseDataset(Dataset):
     def get_ext_int(self, params, camera_id):
         lidar_to_camera = params["camera%d" % camera_id]['extrinsic'].astype(np.float32) # R_cw
         camera_to_lidar = np.linalg.inv(lidar_to_camera) # R_wc
-        camera_intrinsic = params["camera%d" % camera_id]['intrinsic'].astype(np.float32
-        )
+        camera_intrinsic = params["camera%d" % camera_id]['intrinsic'].astype(np.float32)
         return camera_to_lidar, camera_intrinsic
 
     def augment(self, lidar_np, object_bbx_center, object_bbx_mask):

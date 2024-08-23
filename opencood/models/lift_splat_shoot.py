@@ -195,7 +195,7 @@ class LiftSplatShoot(nn.Module):
             dm = self.dir_head(x)
             output_dict.update({"dir_preds": dm})
 
-        return output_dict
+        return [x], output_dict
 
 
 def compile_model(grid_conf, data_aug_conf, outC):

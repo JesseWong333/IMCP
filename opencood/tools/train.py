@@ -2,7 +2,6 @@
 # Author: Yifan Lu <yifan_lu@sjtu.edu.cn>, Runsheng Xu <rxx3386@ucla.edu>
 # License: TDG-Attribution-NonCommercial-NoDistrib
 
-
 import argparse
 import os
 import statistics
@@ -15,6 +14,7 @@ import opencood.hypes_yaml.yaml_utils as yaml_utils
 from opencood.tools import train_utils
 from opencood.data_utils.datasets import build_dataset
 import glob
+import loralib as lora
 from icecream import ic
 
 def train_parser():
@@ -60,6 +60,25 @@ def main():
     model = train_utils.create_model(hypes)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
+    # load one side parameters
+    if hypes['train_agent_ID'] == -1:
+        ego_model_dict = torch.load(hypes['method_ego_path'])
+        i_model_dict = torch.load(hypes['method_i_path'])
+        ego_model_dict.update(i_model_dict)
+        load_results = model.load_state_dict(ego_model_dict, strict=False)
+        print("load unexpected_keys:" + str(load_results.unexpected_keys))
+        
+        extra_agent_name = hypes['model']['args']['defor_encoder_fusion']['agent_names'][1]
+        for name, value in model.named_parameters():
+            # only tune Lora and paeameters assiaated with agent_names
+            if 'lora_' in name or extra_agent_name in name:
+                value.requires_grad = True
+            else:
+                value.requires_grad = False
+        # setup optimizer
+        params = filter(lambda p: p.requires_grad, model.parameters())
+        optimizer = train_utils.setup_optimizer(hypes, params)
+
     # record lowest validation loss checkpoint.
     lowest_val_loss = 1e5
     lowest_val_epoch = -1
@@ -111,14 +130,19 @@ def main():
             optimizer.zero_grad()
             batch_data = train_utils.to_device(batch_data, device)
             batch_data['ego']['epoch'] = epoch
-            ouput_dict = model(batch_data['ego'])
             
-            final_loss = criterion(ouput_dict, batch_data['ego']['label_dict'])
-            criterion.logging(epoch, i, len(train_loader), writer)
-
-            if supervise_single_flag:
-                final_loss += criterion(ouput_dict, batch_data['ego']['label_dict_single'], suffix="_single")
-                criterion.logging(epoch, i, len(train_loader), writer, suffix="_single")
+            cav_id = hypes['train_agent_ID']
+            ouput_dict = model(batch_data)
+            
+            # train stage
+            final_loss = 0
+            if cav_id == -1: # 协同
+                final_loss += criterion(ouput_dict, batch_data['ego']['label_dict']) # 协同的loss
+                criterion.logging(epoch, i, len(train_loader), writer)
+            else:
+                # supervise_single_flag          
+                final_loss += criterion(ouput_dict, batch_data[cav_id]['label_dict_single'])
+                criterion.logging(epoch, i, len(train_loader), writer)
 
             # back-propagation
             final_loss.backward()
@@ -139,10 +163,16 @@ def main():
 
                     batch_data = train_utils.to_device(batch_data, device)
                     batch_data['ego']['epoch'] = epoch
-                    ouput_dict = model(batch_data['ego'])
+                    ouput_dict = model(batch_data)
 
-                    final_loss = criterion(ouput_dict,
-                                           batch_data['ego']['label_dict'])
+                    final_loss = 0
+                    if cav_id == -1: # 协同
+                        final_loss += criterion(ouput_dict, batch_data['ego']['label_dict']) # 协同的loss
+                        criterion.logging(epoch, i, len(train_loader), writer)
+                    else:
+                        # supervise_single_flag          
+                        final_loss += criterion(ouput_dict, batch_data[cav_id]['label_dict_single'])
+                        criterion.logging(epoch, i, len(train_loader), writer)
                     valid_ave_loss.append(final_loss.item())
 
             valid_ave_loss = statistics.mean(valid_ave_loss)

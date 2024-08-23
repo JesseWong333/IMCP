@@ -143,7 +143,7 @@ class BasePostprocessor(object):
 
             object_bbx_center = cav_content['object_bbx_center']
             object_bbx_mask = cav_content['object_bbx_mask']
-            object_ids = cav_content['object_ids']
+            # object_ids = cav_content['object_ids']
             object_bbx_center = object_bbx_center[object_bbx_mask == 1]
 
             # convert center to corner
@@ -194,7 +194,6 @@ class BasePostprocessor(object):
         mask = \
             box_utils.get_mask_for_boxes_within_range_torch(gt_box3d_tensor, self.params['gt_range'])
         gt_box3d_tensor = gt_box3d_tensor[mask, :, :]
-
 
         return gt_box3d_tensor
 
@@ -398,7 +397,7 @@ class BasePostprocessor(object):
         # tmp_object_dict = {}
         tmp_object_list = []
         cav_content = cav_contents[0]
-        tmp_object_list = cav_content['params'][f'vehicles{suffix}'] # ego 坐标系下
+        tmp_object_list = cav_content['params'][f'vehicles{suffix}']
 
         output_dict = {}
         filter_range = self.params['anchor_args']['cav_lidar_range']

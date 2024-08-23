@@ -40,7 +40,7 @@ def test_parser():
 def main():
     opt = test_parser()
 
-    assert opt.fusion_method in ['late', 'early', 'intermediate', 'no', 'no_w_uncertainty', 'single'] 
+    assert opt.fusion_method in ['late', 'early', 'intermediate', 'no', 'no_w_uncertainty', 'single', 'single_w_id'] 
 
     hypes = yaml_utils.load_yaml(None, opt)
 
@@ -154,6 +154,11 @@ def main():
                                                                 model,
                                                                 opencood_dataset,
                                                                 single_gt=True)
+            elif opt.fusion_method == 'single_w_id':
+                infer_result = inference_utils.inference_no_fusion_with_id(batch_data,
+                                                                model,
+                                                                opencood_dataset,
+                                                                hypes['train_agent_ID'])
             else:
                 raise NotImplementedError('Only single, no, no_w_uncertainty, early, late and intermediate'
                                         'fusion is supported.')
@@ -217,7 +222,7 @@ def main():
                 simple_vis.visualize(infer_result,
                                     batch_data['ego'][
                                         'origin_lidar'][0],
-                                    hypes['postprocess']['gt_range'],
+                                    hypes[hypes['method_v']]['postprocess']['gt_range'],
                                     vis_save_path,
                                     method='bev',
                                     left_hand=left_hand)

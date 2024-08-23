@@ -14,7 +14,7 @@ from opencood.models.sub_modules.torch_transformation_utils import \
     warp_affine_simple
 from opencood.utils.transformation_utils import normalize_pairwise_tfm
 from opencood.models.fuse_modules.fusion_in_one import \
-    MaxFusion, AttFusion, V2VNetFusion, V2XViTFusion, When2commFusion, Where2commFusion, DiscoFusion
+    MaxFusion, AttFusion, V2VNetFusion, V2XViTFusion, When2commFusion, DiscoFusion
 
 class Up(nn.Module):
     def __init__(self, in_channels, out_channels, scale_factor=2):
