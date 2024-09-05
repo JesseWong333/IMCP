@@ -12,9 +12,9 @@ class ModelAgnosticBase(nn.Module):
         super(ModelAgnosticBase, self).__init__()
 
         # 1) 训练哪一个agent 2) 使用哪一种方法
-        if args['train_agent_ID'] == -1:
+        if args['train_agent_ID'] < 0:
+            self.model_v = self.build_model(args['method_v'], args) 
             self.model_i = self.build_model(args['method_i'], args) 
-            self.model_v = self.build_model(args['method_v'], args) # 可以是list
             self.model_fusion = self.build_model(args['method_fusion'], args)
 
         elif args['train_agent_ID'] == 0:
@@ -30,14 +30,14 @@ class ModelAgnosticBase(nn.Module):
         self.train_agent_ID = args['train_agent_ID']
 
     def build_model(self, method, args):
-        if method == 'point_pillar':
-            return PointPillar(args['point_pillar'])  
-        elif method == 'second':
+        if 'point_pillar' in method:
+            return PointPillar(args[method])  
+        elif 'second' in method:
             return Second(args['second'])
-        elif method == 'lss':
+        elif 'lss' in method:
             return LiftSplatShoot(args['lss'])
-        elif method == 'defor_encoder_fusion':
-            return DeforEncoderFusion(args['defor_encoder_fusion'])
+        elif 'defor_encoder_fusion' in method:
+            return DeforEncoderFusion(args[method])
 
     def repack_data(self, data_dict, id):
         data = data_dict[id]
@@ -57,7 +57,15 @@ class ModelAgnosticBase(nn.Module):
     def forward(self, data_dict):
         pairwise_t_matrix = data_dict['ego']['pairwise_t_matrix'] # B, cav_id, cav_id, 4, 4
 
-        # 当前0是ifrastructure, 1是veichle
+        if self.train_agent_ID == -2:
+            data_dict_v = self.repack_data(data_dict, 0)
+            data_dict_i = self.repack_data(data_dict, 1)
+            feature_v, _ = self.model_v(data_dict_v)
+            feature_i, _ = self.model_i(data_dict_i) 
+            # fusion module
+            _, output_dict = self.model_fusion( [feature_v, feature_i], pairwise_t_matrix)
+            return output_dict
+
         if self.train_agent_ID == -1:
             # vehicle
             data_dict_v = self.repack_data(data_dict, 0)

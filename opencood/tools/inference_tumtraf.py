@@ -16,6 +16,8 @@ from opencood.tools import train_utils, inference_utils
 from opencood.data_utils.datasets import build_dataset
 from opencood.utils import eval_utils
 from opencood.visualization import vis_utils, my_vis, simple_vis
+import pickle
+from opencood.utils.box_utils import corner_to_center
 torch.multiprocessing.set_sharing_strategy('file_system')
 
 def test_parser():
@@ -25,7 +27,7 @@ def test_parser():
     parser.add_argument('--fusion_method', type=str,
                         default='intermediate',
                         help='no, no_w_uncertainty, late, early or intermediate')
-    parser.add_argument('--save_vis_interval', type=int, default=40,
+    parser.add_argument('--save_vis_interval', type=int, default=1,
                         help='interval of saving visualization')
     parser.add_argument('--save_npy', action='store_true',
                         help='whether to save prediction and gt result'
@@ -35,6 +37,58 @@ def test_parser():
     parser.add_argument('--note', default="", type=str, help="any other thing?")
     opt = parser.parse_args()
     return opt
+
+CLASSES = ('CAR', 'TRAILER', 'TRUCK', 'VAN', 'PEDESTRIAN', 'BUS', 'MOTORCYCLE', 'OTHER', 'BICYCLE', 'EMERGENCY_VEHICLE')
+cls_range = {
+        "CAR": 50,
+        "TRUCK": 50,
+        "BUS": 50,
+        "TRAILER": 50,
+        "VAN": 50,
+        'EMERGENCY_VEHICLE': 50,
+        "PEDESTRIAN": 40,
+        "MOTORCYCLE": 40,
+        "BICYCLE": 40,
+        "OTHER": 30
+    }
+
+def load_annotations(ann_file):
+    with open(ann_file, mode='rb') as f:
+        data = pickle.load(f)
+    data_infos = list(sorted(data["infos"], key=lambda e: e["timestamp"]))
+    return data_infos
+
+def load_gt(eval_pkl):
+    data_infos = load_annotations(eval_pkl)
+    # filter out bbox containing no points
+    all_filtered_gt_boxes = []
+    for info in data_infos:
+        mask = (info["num_lidar_pts"] != 0)
+       
+        gt_bboxes_3d = info["gt_boxes"][mask]
+        gt_names = info["gt_names"][mask]
+        gt_corner_points = info['gt_corner_points'][mask]
+
+        ego_dist = np.sqrt(np.sum(gt_bboxes_3d[:, :2] ** 2, axis=1))
+
+        mask = []
+        for dist, name in zip(ego_dist, gt_names):
+            if dist < cls_range[name]:
+                mask.append(True)
+            else:
+                mask.append(False)
+        mask = np.array(mask, dtype=bool)
+        gt_corner_points = gt_corner_points[mask]
+        all_filtered_gt_boxes.append(gt_corner_points)        
+    return all_filtered_gt_boxes
+
+def filter_eval(pred_box, pred_score):
+    pred_center = corner_to_center(pred_box.cpu().numpy())
+    ego_dist = np.sqrt(np.sum(pred_center[:, :2] ** 2, axis=1))
+    mask = ego_dist < 50
+    pred_box = pred_box[mask]
+    pred_score = pred_score[mask]
+    return pred_box, pred_score
 
 
 def main():
@@ -123,6 +177,7 @@ def main():
     infer_info = opt.fusion_method + opt.note
 
 
+    filtered_gt = load_gt(hypes['test_dir'])
     for i, batch_data in enumerate(data_loader):
         print(f"{infer_info}_{i}")
         if batch_data is None:
@@ -163,9 +218,11 @@ def main():
             else:
                 raise NotImplementedError('Only single, no, no_w_uncertainty, early, late and intermediate'
                                         'fusion is supported.')
-            
+            infer_result['pred_box_tensor'], infer_result['pred_score'] = filter_eval(infer_result['pred_box_tensor'], infer_result['pred_score'])
             pred_box_tensor = infer_result['pred_box_tensor']
-            gt_box_tensor = infer_result['gt_box_tensor']
+            # gt_box_tensor = infer_result['gt_box_tensor']
+            gt_box_tensor = torch.from_numpy(filtered_gt[i])
+            infer_result['gt_box_tensor'] = gt_box_tensor
             pred_score = infer_result['pred_score']
             
             eval_utils.caluclate_tp_fp(pred_box_tensor,
@@ -202,8 +259,7 @@ def main():
                 infer_result.update({"cav_box_np": cav_box_np, \
                                      "lidar_agent_record": lidar_agent_record})
 
-            # if (i % opt.save_vis_interval == 0) and (pred_box_tensor is not None):
-            if (i % opt.save_vis_interval == 0):
+            if (i % opt.save_vis_interval == 0) and (pred_box_tensor is not None):
                 vis_save_path_root = os.path.join(opt.model_dir, f'vis_{infer_info}')
                 if not os.path.exists(vis_save_path_root):
                     os.makedirs(vis_save_path_root)

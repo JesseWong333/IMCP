@@ -11,21 +11,26 @@
             "program": "${file}",
             "console": "integratedTerminal",
             "env":{
-                "CUDA_VISIBLE_DEVICES": "1",
+                "CUDA_VISIBLE_DEVICES": "0",
                 // "CUDA_LAUNCH_BLOCKING": "1",
                 "DISPLAY": ":1.0"
             },
             "justMyCode": false,
             // "args": [
             //     "--hypes_yaml", 
-            //     "./opencood/hypes_yaml/dairv2x/pointpillar_deformable_attn_coop_extend_lss.yaml"
+            //     // "./opencood/hypes_yaml/dairv2x/pointpillar_deformable_attn_coop_extend_lss.yaml"
+            //     // "./opencood/hypes_yaml/v2v4real/pointpillar_deformable_attn_coop_single.yaml"
+            //     // "./opencood/hypes_yaml/dairv2x/i_single_pointpillar_seg_task.yaml"
+            //     // "./opencood/hypes_yaml/dairv2x/pointpillar_deformable_attn_coop_extend_point_pillar.yaml"
+            //     // "./opencood/hypes_yaml/v2v4real/pointpillar_deformable_attn_coop_point_pillar_extend_point_pillar.yaml"
+            //     "./opencood/hypes_yaml/dairv2x/pointpillar_deformable_attn_coop_extend_point_pillar_seg.yaml"
             // ]
 
             // eval 
             "args": [
                 // "--model_dir", "./opencood/logs/point_pillar_point_pillar_train_all_test_2024_07_30_22_52_07",
                 // "--fusion_method", "intermediate"
-                // "--model_dir", "./opencood/logs/v_point_pillar_2024_08_01_17_43_01",
+                // "--model_dir", "./opencood/logs/ego_pointpillar_2024_08_13_13_06_12",
                 // "--fusion_method", "single_w_id"
                 // "--model_dir", "./opencood/logs/i_point_pillar_2024_08_01_17_41_50",
                 // "--fusion_method", "single_w_id"
@@ -33,7 +38,7 @@
                 // "--fusion_method", "single_w_id"
                 //  "--model_dir", "./opencood/logs/i_second_100_252_2024_08_02_21_08_47",
                 // "--fusion_method", "single_w_id"
-                 "--model_dir", "./opencood/logs/pointpillar_lss_lora_32_64_adapter_3_2024_08_18_19_42_07",
+                 "--model_dir", "./opencood/logs/pointpillar_pointpillar_seg_lora_0_0_adapter_3_2024_09_05_18_04_37",
                 "--fusion_method", "intermediate"
             ]
         

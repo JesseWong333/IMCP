@@ -9,9 +9,10 @@ Template for AnchorGenerator
 import numpy as np
 import torch
 import cv2
-
+import copy
 from opencood.utils import box_utils
 from opencood.utils import common_utils
+from opencood.utils.transformation_utils import x1_to_x2
 
 class BasePostprocessor(object):
     """
@@ -197,6 +198,73 @@ class BasePostprocessor(object):
 
         return gt_box3d_tensor
 
+    def generate_gt_bbx_by_iou_tumtraf(self, data_dict):
+        """
+            we simply load from the file
+        """
+        # 
+        gt_box3d_list = []
+
+        for cav_id, cav_content in data_dict.items():
+            # used to project gt bounding box to ego space
+            # object_bbx_center is clean.
+            transformation_matrix = cav_content['transformation_matrix_clean']
+
+            object_bbx_center = cav_content['object_bbx_center']
+            object_bbx_mask = cav_content['object_bbx_mask']
+            # object_ids = cav_content['object_ids']
+            object_bbx_center = object_bbx_center[object_bbx_mask == 1]
+
+            # convert center to corner
+            object_bbx_corner = \
+                box_utils.boxes_to_corners_3d(object_bbx_center,
+                                              self.params['order'])
+            projected_object_bbx_corner = \
+                box_utils.project_box3d(object_bbx_corner.float(),
+                                        transformation_matrix)
+            gt_box3d_list.append(projected_object_bbx_corner)
+
+        # if only ego agent
+        if len(data_dict) == 1:
+            gt_box3d_tensor = torch.vstack(gt_box3d_list)
+        # both veh-side and inf-side label
+        else:
+            veh_corners_np = gt_box3d_list[0].cpu().numpy()
+            inf_corners_np = gt_box3d_list[1].cpu().numpy()
+            inf_polygon_list = list(common_utils.convert_format(inf_corners_np))
+            veh_polygon_list = list(common_utils.convert_format(veh_corners_np))
+            iou_thresh = 0.05 
+
+            gt_from_inf = []
+            for i in range(len(inf_polygon_list)):
+                inf_polygon = inf_polygon_list[i]
+                ious = common_utils.compute_iou(inf_polygon, veh_polygon_list)
+                if (ious > iou_thresh).any():
+                    continue
+                gt_from_inf.append(inf_corners_np[i])
+            
+            if len(gt_from_inf):
+                gt_from_inf = np.stack(gt_from_inf)
+                gt_box3d = np.vstack([veh_corners_np, gt_from_inf])
+            else:
+                gt_box3d = veh_corners_np
+
+            gt_box3d_tensor = torch.from_numpy(gt_box3d).to(device=gt_box3d_list[0].device)
+
+        # mask_boxes_outside_range_numpy has filtering of z-dim
+        # gt_box3d_np = gt_box3d_tensor.cpu().numpy()
+        # gt_box3d_np = box_utils.mask_boxes_outside_range_numpy(gt_box3d_np,
+        #                                             self.params['gt_range'],
+        #                                             self.params['order'])
+        # gt_box3d_tensor = torch.from_numpy(gt_box3d_np).to(device=gt_box3d_list[0].device)
+
+        # need discussion. not filter z-dim.
+        mask = \
+            box_utils.get_mask_for_boxes_within_range_torch(gt_box3d_tensor, self.params['gt_range'])
+        gt_box3d_tensor = gt_box3d_tensor[mask, :, :]
+
+        return gt_box3d_tensor
+    
     def generate_object_center(self,
                                cav_contents,
                                reference_lidar_pose,
@@ -348,7 +416,7 @@ class BasePostprocessor(object):
         # tmp_object_dict = {}
         tmp_object_list = []
         cav_content = cav_contents[0]
-        tmp_object_list = cav_content['params']['vehicles'] #世界坐标系下
+        tmp_object_list = cav_content['params']['vehicles']
 
         output_dict = {}
         filter_range = self.params['anchor_args']['cav_lidar_range']
@@ -417,6 +485,87 @@ class BasePostprocessor(object):
             mask[i] = 1
             object_ids.append(object_id)
 
+        return object_np, mask, object_ids
+
+
+    def generate_object_center_tumtraf_single(self,
+                               cav_contents,
+                               suffix=""):
+        """
+        Retrieve all objects in a format of (n, 7), where 7 represents
+        x, y, z, l, w, h, yaw or x, y, z, h, w, l, yaw.
+
+        Parameters
+        ----------
+        cav_contents : list
+            List of dictionary, save all cavs' information.
+
+        Returns
+        -------
+        object_np : np.ndarray
+            Shape is (max_num, 7).
+        mask : np.ndarray
+            Shape is (max_num,).
+        object_ids : list
+            Length is number of bbx in current sample.
+        """
+
+        # tmp_object_dict = {}
+        tmp_object_list = []
+        cav_content = cav_contents[0]
+        object_dict = cav_content['params'][f'vehicles{suffix}']
+        bbx_lidar = object_dict['gt_bboxes_3d']
+        gt_names = object_dict['gt_names']
+        gt_labels = object_dict['gt_labels_3d']
+        
+        filter_range = self.params['anchor_args']['cav_lidar_range']
+
+        lidar_range_z_larger = copy.deepcopy(filter_range)
+        lidar_range_z_larger[2] -= 1
+        lidar_range_z_larger[5] += 1
+
+        bbx_lidar, filter_mask = box_utils.mask_boxes_outside_range_numpy(bbx_lidar, lidar_range_z_larger, 'hwl', return_mask=True)
+
+        object_np = np.zeros((self.params['max_num'], 7))
+        mask = np.zeros(self.params['max_num'])
+        object_ids = []
+
+        for i, object_bbx in enumerate(bbx_lidar):
+            object_np[i] = object_bbx
+            mask[i] = 1
+            object_ids.append(i)
+
+        return object_np, mask, object_ids
+    
+    def generate_object_center_tumtraf(self, cav_contents, 
+                                       reference_lidar_pose):
+        tmp_object_list = []
+        cav_content = cav_contents[0]
+        
+        object_np = np.zeros((self.params['max_num'], 7))
+        mask = np.zeros(self.params['max_num'])
+        object_ids = []
+
+        cav_content = cav_contents[0]
+        if 'vehicles' not in cav_content['params']:
+            return object_np, mask, object_ids
+        object_dict = cav_content['params']['vehicles']
+        bbx_lidar = object_dict['gt_bboxes_3d']
+        gt_names = object_dict['gt_names']
+        gt_labels = object_dict['gt_labels_3d']
+
+        filter_range = self.params['anchor_args']['cav_lidar_range']
+
+        lidar_range_z_larger = copy.deepcopy(filter_range)
+        lidar_range_z_larger[2] -= 1
+        lidar_range_z_larger[5] += 1
+
+        bbx_lidar, filter_mask = box_utils.mask_boxes_outside_range_numpy(bbx_lidar, lidar_range_z_larger, 'hwl', return_mask=True)
+
+        for i,  object_bbx in enumerate(bbx_lidar):
+            object_np[i] = object_bbx
+            mask[i] = 1
+            object_ids.append(i)
         return object_np, mask, object_ids
 
 
@@ -524,4 +673,122 @@ class BasePostprocessor(object):
             object_np[i] = object_bbx[0, :]
             mask[i] = 1
             object_ids.append(object_id)
+        return object_np, mask, object_ids
+
+    def generate_object_center_v2v4real(self,
+                                cav_contents,
+                                reference_lidar_pose):
+            """
+            v2v4real 需要投影
+            Retrieve all objects in a format of (n, 7), where 7 represents
+            x, y, z, l, w, h, yaw or x, y, z, h, w, l, yaw.
+
+            Parameters
+            ----------
+            cav_contents : list
+                List of dictionary, save all cavs' information.
+
+            reference_lidar_pose : np.ndarray
+                The final target lidar pose with length 6.
+
+            Returns
+            -------
+            object_np : np.ndarray
+                Shape is (max_num, 7).
+            mask : np.ndarray
+                Shape is (max_num,).
+            object_ids : list
+                Length is number of bbx in current sample.
+            """
+            GT_RANGE = [-100, -40, -5, 100, 40, 3]
+
+            transformation_matrix = x1_to_x2(cav_contents[0]['params']['lidar_pose'], reference_lidar_pose)
+
+            tmp_object_dict = {}
+            for cav_content in cav_contents:
+                tmp_object_dict.update(cav_content['params']['vehicles'])
+                cav_id = cav_content['cav_id']
+
+            output_dict = {}
+            filter_range = self.params['anchor_args']['cav_lidar_range'] \
+                if self.train else GT_RANGE   # 训练和测试使用不同的range
+
+            box_utils.project_world_objects_v2v4real(tmp_object_dict,
+                                            output_dict,
+                                            transformation_matrix,
+                                            filter_range,
+                                            self.params['order'])
+
+            object_np = np.zeros((self.params['max_num'], 7))
+            mask = np.zeros(self.params['max_num'])
+            object_ids = []
+
+            for i, (object_id, object_content) in enumerate(output_dict.items()):
+                object_bbx = object_content['coord']
+                object_np[i] = object_bbx[0, :]
+                mask[i] = 1
+                if object_content['ass_id'] != -1:
+                    object_ids.append(object_content['ass_id'])
+                else:
+                    object_ids.append(object_id + 100 * cav_id)
+
+            return object_np, mask, object_ids
+    
+    def generate_object_center_v2v4real_single(self,
+                            cav_contents,
+                            reference_lidar_pose):
+        """
+        v2v4real_single 无需投影
+        Retrieve all objects in a format of (n, 7), where 7 represents
+        x, y, z, l, w, h, yaw or x, y, z, h, w, l, yaw.
+
+        Parameters
+        ----------
+        cav_contents : list
+            List of dictionary, save all cavs' information.
+
+        reference_lidar_pose : np.ndarray
+            The final target lidar pose with length 6.
+
+        Returns
+        -------
+        object_np : np.ndarray
+            Shape is (max_num, 7).
+        mask : np.ndarray
+            Shape is (max_num,).
+        object_ids : list
+            Length is number of bbx in current sample.
+        """
+        GT_RANGE = [-100, -40, -5, 100, 40, 3]
+
+        tmp_object_dict = {}
+        for cav_content in cav_contents:
+            tmp_object_dict.update(cav_content['params']['vehicles'])
+            cav_id = cav_content['cav_id']
+
+        transformation_matrix =  np.identity(4)
+
+        output_dict = {}
+        filter_range = self.params['anchor_args']['cav_lidar_range'] \
+            if self.train else GT_RANGE   # 训练和测试使用不同的range
+
+        box_utils.project_world_objects_v2v4real(tmp_object_dict,
+                                        output_dict,
+                                        transformation_matrix,
+                                        filter_range,
+                                        self.params['order'])
+
+        object_np = np.zeros((self.params['max_num'], 7))
+        mask = np.zeros(self.params['max_num'])
+        object_ids = []
+
+        for i, (object_id, object_content) in enumerate(output_dict.items()):
+            object_bbx = object_content['coord']
+            object_np[i] = object_bbx[0, :]
+            mask[i] = 1
+            if object_content['ass_id'] != -1:
+                object_ids.append(object_content['ass_id'])
+            else:
+                object_ids.append(object_id + 100 * cav_id)
+
         return object_np, mask, object_ids

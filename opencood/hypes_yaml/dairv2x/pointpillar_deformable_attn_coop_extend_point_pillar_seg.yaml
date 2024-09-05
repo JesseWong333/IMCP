@@ -1,4 +1,4 @@
-name: test_pointpillar_pointpillar_lora_0_0_adapter_5
+name: pointpillar_pointpillar_seg_lora_0_0_adapter_3
 data_dir: "/hd_cache/datasets/DAIR-V2X/cooperative-vehicle-infrastructure"
 root_dir: "/data/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/train.json"
 validate_dir: "/data/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/val.json"
@@ -19,7 +19,7 @@ method_i: &method_i point_pillar
 
 # method_v_path: ./opencood/logs/v_point_pillar_2024_08_01_17_43_01/net_epoch_bestval_at13.pth
 method_ego_path: ./opencood/logs/ego_pointpillar_2024_08_13_13_06_12/net_epoch_bestval_at13.pth
-method_i_path: ./opencood/logs/i_point_pillar_2024_08_01_17_41_50/net_epoch_bestval_at15.pth
+method_i_path: ./opencood/logs/i_point_pillar_seg_task_2024_09_05_00_09_19/net_epoch_bestval_at19.pth
 
 noise_setting:
   add_noise: false
@@ -230,15 +230,15 @@ model:
       discrete_ratio: 0.8
       embed_dims: &embed_dims 128 # 128 for multi-scale; 384 for single scale
       max_num_agent: *max_cav
-      agent_names: &agent_names ["ego", "point_pillar_v"]
+      agent_names: &agent_names ["ego", "point_pillar_i"]
       feature_levels: &feature_levels [3, 3]
       lora_rank: 0
       anchor_number: 2
       # adapter parameters
-      n_adapters: 5
+      n_adapters: 3
       adapters: 
         ego: [[64, 128, 256], [128, 128, 128]]
-        point_pillar_v: [[64, 128, 256], [128, 128, 128]]
+        point_pillar_i: [[64, 128, 256], [128, 128, 128]]
         # second: [[128], [128]]     
 
       # cross first

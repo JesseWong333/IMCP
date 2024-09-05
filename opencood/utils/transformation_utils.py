@@ -12,6 +12,7 @@ import numpy as np
 import torch
 from icecream import ic
 from pyquaternion import Quaternion
+import math
 from opencood.utils.common_utils import check_numpy_to_torch
 
 def regroup(x, record_len):
@@ -308,16 +309,16 @@ def x_to_world(pose):
 
 def x1_to_x2(x1, x2):
     """
-    Transformation matrix from x1 to x2. T_x2_x1
+    Transformation matrix from x1 to x2.
 
     Parameters
     ----------
-    x1 : list
-        The pose of x1 under world coordinates.
-    x2 : list
-        The pose of x2 under world coordinates.
-
-        yaw, pitch, roll in degree
+    x1 : list or np.ndarray
+        The pose of x1 under world coordinates or
+        transformation matrix x1->world
+    x2 : list or np.ndarray
+        The pose of x2 under world coordinates or
+         transformation matrix x2->world
 
     Returns
     -------
@@ -325,11 +326,22 @@ def x1_to_x2(x1, x2):
         The transformation matrix.
 
     """
-    x1_to_world = x_to_world(x1) # wP = x1_to_world * 1P, so x1_to_world is Tw1
-    x2_to_world = x_to_world(x2) # Tw2
-    world_to_x2 = np.linalg.inv(x2_to_world) # T2w
+    if isinstance(x1, list) and isinstance(x2, list):
+        x1_to_world = x_to_world(x1)
+        x2_to_world = x_to_world(x2)
+        world_to_x2 = np.linalg.inv(x2_to_world)
+        transformation_matrix = np.dot(world_to_x2, x1_to_world)
 
-    transformation_matrix = np.dot(world_to_x2, x1_to_world) # T2w * Tw1 = T21
+    # object pose is list while lidar pose is transformation matrix
+    elif isinstance(x1, list) and not isinstance(x2, list):
+        x1_to_world = x_to_world(x1)
+        world_to_x2 = x2
+        transformation_matrix = np.dot(world_to_x2, x1_to_world)
+    # both are numpy matrix
+    else:
+        world_to_x2 = np.linalg.inv(x2)
+        transformation_matrix = np.dot(world_to_x2, x1)
+
     return transformation_matrix
 
 
@@ -486,6 +498,22 @@ def rot_and_trans_to_trasnformation_matrix(json_file):
     matrix[3, 3] = 1
 
     return matrix
+
+def dist_two_pose(cav_pose, ego_pose):
+    """
+    Calculate the distance between agent by given there pose.
+    """
+    if isinstance(cav_pose, list):
+        distance = \
+            math.sqrt((cav_pose[0] -
+                       ego_pose[0]) ** 2 +
+                      (cav_pose[1] - ego_pose[1]) ** 2)
+    else:
+        distance = \
+            math.sqrt((cav_pose[0, -1] -
+                       ego_pose[0, -1]) ** 2 +
+                      (cav_pose[1, -1] - ego_pose[1, -1]) ** 2)
+    return distance
 
 
 def test():

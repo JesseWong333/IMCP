@@ -69,10 +69,12 @@ def main():
         print("load unexpected_keys:" + str(load_results.unexpected_keys))
         
         extra_agent_name = hypes['model']['args']['defor_encoder_fusion']['agent_names'][1]
+        print("tuning paraameters:")
         for name, value in model.named_parameters():
             # only tune Lora and paeameters assiaated with agent_names
             if 'lora_' in name or extra_agent_name in name:
                 value.requires_grad = True
+                print(name)
             else:
                 value.requires_grad = False
         # setup optimizer
@@ -124,7 +126,7 @@ def main():
         for i, batch_data in enumerate(train_loader):
             if batch_data is None or batch_data['ego']['object_bbx_mask'].sum()==0:
                 continue
-            # the model will be evaluation mode during validation
+            # the model will be evaluation mode during validation 
             model.train()
             model.zero_grad()
             optimizer.zero_grad()
@@ -136,7 +138,7 @@ def main():
             
             # train stage
             final_loss = 0
-            if cav_id == -1: # 协同
+            if cav_id < 0: # 协同
                 final_loss += criterion(ouput_dict, batch_data['ego']['label_dict']) # 协同的loss
                 criterion.logging(epoch, i, len(train_loader), writer)
             else:
@@ -166,7 +168,7 @@ def main():
                     ouput_dict = model(batch_data)
 
                     final_loss = 0
-                    if cav_id == -1: # 协同
+                    if cav_id < 0: # 协同
                         final_loss += criterion(ouput_dict, batch_data['ego']['label_dict']) # 协同的loss
                         criterion.logging(epoch, i, len(train_loader), writer)
                     else:

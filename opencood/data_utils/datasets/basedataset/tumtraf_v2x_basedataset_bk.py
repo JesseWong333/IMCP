@@ -1,4 +1,4 @@
-# Author: Junjie Wang <Junjie.Wang@umu.se>
+# Author: Yangheng Zhao <zhaoyangheng-sjtu@sjtu.edu.cn>
 import os
 import pickle
 from collections import OrderedDict
@@ -18,8 +18,7 @@ from opencood.data_utils.post_processor import build_postprocessor
 
 class TUMTRAFBaseDataset(Dataset):
 
-    # CLASSES = ('CAR', 'TRAILER', 'TRUCK', 'VAN', 'PEDESTRIAN', 'BUS', 'MOTORCYCLE', 'OTHER', 'BICYCLE', 'EMERGENCY_VEHICLE')
-    CLASSES = ['CAR', 'TRAILER', 'TRUCK', 'VAN', 'PEDESTRIAN', 'BUS', 'BICYCLE']
+    CLASSES = ('CAR', 'TRAILER', 'TRUCK', 'VAN', 'PEDESTRIAN', 'BUS', 'MOTORCYCLE', 'OTHER', 'BICYCLE', 'EMERGENCY_VEHICLE')
 
     def __init__(self,
                  params: Dict,
@@ -37,8 +36,8 @@ class TUMTRAFBaseDataset(Dataset):
         self.load_lidar_file = True if 'lidar' in params['input_source'] else False
         self.load_camera_file = True if 'camera' in params['input_source'] else False
 
-        self.inf_lidar_range = [-72., -72., -8., 72., 72., 0]
-        self.veh_lidar_range = [-72., -72., -8., 72., 72., 6]
+        self.inf_lidar_range = [-75., -75.,  -8.,  75.,  75.,   0.]
+        self.veh_lidar_range = [-75., -75.,  -2.,  75.,  75.,   6.]
 
         self.data_infos = self.load_annotations(self.ann_file)
 
@@ -48,8 +47,8 @@ class TUMTRAFBaseDataset(Dataset):
         self.post_processor_i = build_postprocessor(params[params['method_i']]["postprocess"], train)
         self.post_processor_v = build_postprocessor(params[params['method_v']]["postprocess"], train)
 
-        self.post_processor_i.generate_gt_bbx = self.post_processor_i.generate_gt_bbx_by_iou_tumtraf
-        self.post_processor_v.generate_gt_bbx = self.post_processor_v.generate_gt_bbx_by_iou_tumtraf
+        self.post_processor_i.generate_gt_bbx = self.post_processor_i.generate_gt_bbx_by_iou
+        self.post_processor_v.generate_gt_bbx = self.post_processor_v.generate_gt_bbx_by_iou
 
         self.pre_processor = self.pre_processor_v
         self.post_processor = self.post_processor_v
@@ -70,6 +69,7 @@ class TUMTRAFBaseDataset(Dataset):
         assert self.label_type in ['lidar', 'camera']
 
         self.use_valid_flag = True
+        self.with_velocity = False
  
     def __len__(self) -> int:
         return len(self.data_infos)
@@ -91,27 +91,24 @@ class TUMTRAFBaseDataset(Dataset):
         if self.use_valid_flag:
             mask = info["valid_flag"]
         else:
-            mask = info["num_lidar_pts"] != 0
+            mask = info["num_lidar_pts"] > 0
         gt_bboxes_3d = info["gt_boxes"][mask]
         gt_names_3d = info["gt_names"][mask]
         gt_corner_points = info['gt_corner_points'][mask]
-
-        # object name filters
-        name_mask = []
         gt_labels_3d = []
         for cat in gt_names_3d:
             if cat in self.CLASSES:
                 gt_labels_3d.append(self.CLASSES.index(cat))
-                name_mask.append(True)
             else:
-                name_mask.append(False)
+                gt_labels_3d.append(-1)
         gt_labels_3d = np.array(gt_labels_3d)
-        name_mask = np.array(name_mask)
 
-        gt_corner_points = gt_corner_points[name_mask]
-        gt_bboxes_3d = gt_bboxes_3d[name_mask]
-        gt_names_3d = gt_names_3d[name_mask]
-    
+        if self.with_velocity:
+            gt_velocity = info["gt_velocity"][mask]
+            nan_mask = np.isnan(gt_velocity[:, 0])
+            gt_velocity[nan_mask] = [0.0, 0.0]
+            gt_bboxes_3d = np.concatenate([gt_bboxes_3d, gt_velocity], axis=-1)
+
         # the nuscenes box center is [0.5, 0.5, 0.5], we change it to be
         # the same as KITTI (0.5, 0.5, 0)
         # haotian: this is an important change: from 0.5, 0.5, 0.5 -> 0.5, 0.5, 0
@@ -119,7 +116,6 @@ class TUMTRAFBaseDataset(Dataset):
         #     gt_bboxes_3d, box_dim=gt_bboxes_3d.shape[-1], origin=(0.5, 0.5, 0.5)
         # ).convert_to(self.box_mode_3d)
 
-        # 
         anns_results = dict(
             gt_corner_points=gt_corner_points,
             gt_bboxes_3d=gt_bboxes_3d,
@@ -177,7 +173,7 @@ class TUMTRAFBaseDataset(Dataset):
         data = OrderedDict()
 
         data[0] = OrderedDict()
-        data[0]['ego'] = True 
+        data[0]['ego'] = True
         data[1] = OrderedDict()
         data[1]['ego'] = False
 
@@ -185,34 +181,33 @@ class TUMTRAFBaseDataset(Dataset):
         data[1]['params'] = OrderedDict()
 
          # 世界坐标系: infra 的lidar坐标系
-        data[1]['params']['lidar_pose'] = tfm_to_pose(np.array(info["vehicle2infrastructure"])) # c2w
-        data[0]['params']['lidar_pose'] = tfm_to_pose(np.eye(4, 4))  # 世界坐标系为inf的lidar的
+        data[0]['params']['lidar_pose'] = tfm_to_pose(np.array(info["vehicle2infrastructure"])) # c2w
+        data[1]['params']['lidar_pose'] = tfm_to_pose(np.eye(4, 4))  # 世界坐标系为inf的lidar的
 
         data[0]['params']['vehicles'] = self.get_ann_info(info)  # 协同标签, 世界坐标系下
 
         if self.load_camera_file:
             # 相机可能有多个
             vehicle_cams_info = self.get_vehicle_cams_info(info)
-            data[1]['camera_data'] = load_camera_data(vehicle_cams_info[0])
-            data[1]['params']['camera'] = OrderedDict()
-            data[1]['params']['camera']['extrinsic'] = vehicle_cams_info[1]  # lidar to camera
-            data[1]['params']['camera']['intrinsic'] = vehicle_cams_info[2]
+            data[0]['camera_data'] = load_camera_data(vehicle_cams_info[0])
+            data[0]['params']['camera'] = OrderedDict()
+            data[0]['params']['camera']['extrinsic'] = vehicle_cams_info[1]  # lidar to camera
+            data[0]['params']['camera']['intrinsic'] = vehicle_cams_info[2]
 
             inf_cams_info = self.get_inf_cams_info(info)
-            data[0]['camera_data'] = load_camera_data(inf_cams_info[0])
-            data[0]['params']['camera'] = OrderedDict()
-            data[0]['params']['camera']['extrinsic'] = inf_cams_info[1]
-            data[0]['params']['camera']['intrinsic'] = inf_cams_info[2]
+            data[1]['camera_data'] = load_camera_data(inf_cams_info[0])
+            data[1]['params']['camera'] = OrderedDict()
+            data[1]['params']['camera']['extrinsic'] = inf_cams_info[1]
+            data[1]['params']['camera']['intrinsic'] = inf_cams_info[2]
 
 
         if self.load_lidar_file:
-            data[1]['lidar_np'] = self.load_lidar_points(info["vehicle_lidar_path"]) # should be bin file
-            # data[1]['lidar_np'] = self.load_lidar_points(info["infrastructure_lidar_path"])
-            data[0]['lidar_np'] = self.load_lidar_points(info["registered_lidar_path"]) # todo: 使用融合了的path
+            data[0]['lidar_np'] = self.load_lidar_points(info["vehicle_lidar_path"]) # should be bin file
+            data[1]['lidar_np'] = self.load_lidar_points(info["infrastructure_lidar_path"])
 
         # Label for single side 单独的标签使用投影过后的标签
-        data[1]['params']['vehicles_single'] = project_world_objects_tumtraf(data[0]['params']['vehicles'], data[0]['params']['lidar_pose'], self.veh_lidar_range)
-        data[0]['params']['vehicles_single'] = data[0]['params']['vehicles'].copy()
+        data[0]['params']['vehicles_single'] = project_world_objects_tumtraf(data[0]['params']['vehicles'], data[0]['params']['lidar_pose'], self.veh_lidar_range)
+        data[1]['params']['vehicles_single'] = data[0]['params']['vehicles'].copy()
         return data
 
     def generate_object_center_single(self,
@@ -258,6 +253,8 @@ class TUMTRAFBaseDataset(Dataset):
 
         return self.post_processor.generate_object_center_v2x(
             cav_contents, reference_lidar_pose)
+    
+        raise NotImplementedError()
 
     def generate_object_center_camera(self, cav_contents, reference_lidar_pose):
         raise NotImplementedError()

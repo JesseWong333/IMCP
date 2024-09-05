@@ -7,13 +7,15 @@ from opencood.data_utils.datasets.basedataset.opv2v_basedataset import OPV2VBase
 from opencood.data_utils.datasets.basedataset.v2xsim_basedataset import V2XSIMBaseDataset
 from opencood.data_utils.datasets.basedataset.dairv2x_basedataset import DAIRV2XBaseDataset
 from opencood.data_utils.datasets.basedataset.v2xset_basedataset import V2XSETBaseDataset
+from opencood.data_utils.datasets.basedataset.tumtraf_v2x_basedataset import TUMTRAFBaseDataset
+from opencood.data_utils.datasets.basedataset.v2v4real_basedataset import V2V4REALBaseDataset
 
 def build_dataset(dataset_cfg, visualize=False, train=True):
     fusion_name = dataset_cfg['fusion']['core_method']
     dataset_name = dataset_cfg['fusion']['dataset']
 
     assert fusion_name in ['late', 'intermediate', 'intermediate2stage', 'early', 'agnostic']
-    assert dataset_name in ['opv2v', 'v2xsim', 'dairv2x', 'v2xset']
+    assert dataset_name in ['opv2v', 'v2xsim', 'dairv2x', 'v2xset', 'tumtraf', 'v2v4real']
 
     fusion_dataset_func = "get" + fusion_name.capitalize() + "FusionDataset"
     fusion_dataset_func = eval(fusion_dataset_func)

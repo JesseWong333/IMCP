@@ -28,6 +28,7 @@ from opencood.utils.pcd_utils import (
     downsample_lidar_minimum,
 )
 from opencood.utils.common_utils import read_json
+from opencood.data_utils.augmentor.data_augmentor import DataAugmentor
 
 
 def getAgnosticFusionDataset(cls):
@@ -52,6 +53,18 @@ def getAgnosticFusionDataset(cls):
             self.anchor_box = self.anchor_box_v
             self.anchor_box_torch = self.anchor_box_v_torch
 
+            self.create_seg = params['seg_task'] if 'seg_task' in params else False
+
+            # augmenter related
+            if 'data_augment' in params:
+                self.augment_config = params['data_augment']
+                self.data_augmentor = DataAugmentor(params['data_augment'],
+                                                    train,
+                                                    intermediate=True)
+                self.lidar_augment = True
+            else:
+                self.lidar_augment = False
+
             self.kd_flag = params.get('kd_flag', False)
 
             self.box_align = False
@@ -60,7 +73,36 @@ def getAgnosticFusionDataset(cls):
                 self.stage1_result_path = params['box_align']['train_result'] if train else params['box_align']['val_result']
                 self.stage1_result = read_json(self.stage1_result_path)
                 self.box_align_args = params['box_align']['args']
-                
+
+        def generate_augment(self):
+            flip = [None, None, None]
+            noise_rotation = None
+            noise_scale = None
+
+            for aug_ele in self.augment_config:
+                # for intermediate fusion only
+                if 'random_world_rotation' in aug_ele['NAME']:
+                    rot_range = \
+                        aug_ele['WORLD_ROT_ANGLE']
+                    if not isinstance(rot_range, list):
+                        rot_range = [-rot_range, rot_range]
+                    noise_rotation = np.random.uniform(rot_range[0],
+                                                            rot_range[1])
+
+                if 'random_world_flip' in aug_ele['NAME']:
+                    for i, cur_axis in enumerate(aug_ele['ALONG_AXIS_LIST']):
+                        enable = np.random.choice([False, True], replace=False,
+                                                p=[0.5, 0.5])
+                        flip[i] = enable
+
+                if 'random_world_scaling' in aug_ele['NAME']:
+                    scale_range = \
+                        aug_ele['WORLD_SCALE_RANGE']
+                    noise_scale = \
+                        np.random.uniform(scale_range[0], scale_range[1])
+
+            return flip, noise_rotation, noise_scale
+           
         def get_item_single_car(self, selected_cav_base, ego_cav_base, cav_id):
             """
             Process a single CAV's information for the train/test pipeline.
@@ -83,7 +125,7 @@ def getAgnosticFusionDataset(cls):
             """
             selected_cav_processed = {}
             ego_pose, ego_pose_clean = ego_cav_base['params']['lidar_pose'], ego_cav_base['params']['lidar_pose_clean']
-
+     
             # calculate the transformation matrix
             transformation_matrix = \
                 x1_to_x2(selected_cav_base['params']['lidar_pose'],
@@ -104,29 +146,36 @@ def getAgnosticFusionDataset(cls):
                 projected_lidar = \
                     box_utils.project_points_by_matrix_torch(lidar_np[:, :3],
                                                                 transformation_matrix)
-                if self.proj_first:
+                if self.proj_first: 
                     lidar_np[:, :3] = projected_lidar
 
                 if self.visualize:
                     # filter lidar
                     selected_cav_processed.update({'projected_lidar': projected_lidar})
-
+                
                 if self.kd_flag:
                     lidar_proj_np = copy.deepcopy(lidar_np)
                     lidar_proj_np[:,:3] = projected_lidar
-
                     selected_cav_processed.update({'projected_lidar': lidar_proj_np})
-
+    
+            # generate targets label single GT, note the reference pose is itself.
+            object_bbx_center_single, object_bbx_mask_single, object_ids_single = self.generate_object_center_single(
+                [selected_cav_base], selected_cav_base['params']['lidar_pose']
+            )
+            # data augmentation
+            if self.lidar_augment:
+                lidar_np, object_bbx_center_single, object_bbx_mask_single = \
+                self.augment(lidar_np, object_bbx_center_single, object_bbx_mask_single,
+                            selected_cav_base['flip'],
+                            selected_cav_base['noise_rotation'],
+                         selected_cav_base['noise_scale'])
+            if self.load_lidar_file:
                 if cav_id == 0: 
                     processed_lidar = self.pre_processor_v.preprocess(lidar_np)
                 else:
                     processed_lidar = self.pre_processor_i.preprocess(lidar_np)
                 selected_cav_processed.update({'processed_features': processed_lidar})
-
-            # generate targets label single GT, note the reference pose is itself.
-            object_bbx_center_single, object_bbx_mask_single, object_ids_single = self.generate_object_center_single(
-                [selected_cav_base], selected_cav_base['params']['lidar_pose']
-            )
+        
             if cav_id == 0:
                 label_dict_single = self.post_processor_v.generate_label(
                     gt_box_center=object_bbx_center_single, anchors=self.anchor_box_v, mask=object_bbx_mask_single
@@ -135,11 +184,15 @@ def getAgnosticFusionDataset(cls):
                 label_dict_single = self.post_processor_i.generate_label(
                     gt_box_center=object_bbx_center_single, anchors=self.anchor_box_i, mask=object_bbx_mask_single
                 )
+            
+            seg_label = self.create_seg_mask(object_bbx_center_single, object_bbx_mask_single) if self.create_seg else None
 
             selected_cav_processed.update({
                                 "single_label_dict": label_dict_single,
                                 "single_object_bbx_center": object_bbx_center_single,
-                                "single_object_bbx_mask": object_bbx_mask_single})
+                                "single_object_bbx_mask": object_bbx_mask_single,
+                                "single_object_ids": object_ids_single,
+                                "single_seg_label": seg_label})
 
             # camera
             if self.load_camera_file:
@@ -245,12 +298,14 @@ def getAgnosticFusionDataset(cls):
                 }
             )
 
-
             return selected_cav_processed
 
         def __getitem__(self, idx):
             base_data_dict = self.retrieve_base_data(idx)
             base_data_dict = add_noise_data_dict(base_data_dict,self.params['noise_setting'])
+
+            if self.lidar_augment:
+                flip, noise_rotation, noise_scale = self.generate_augment()
 
             processed_data_dict = OrderedDict()
             for cav_id in base_data_dict:
@@ -325,6 +380,12 @@ def getAgnosticFusionDataset(cls):
             
             for _i, cav_id in enumerate(cav_id_list):
                 selected_cav_base = base_data_dict[cav_id]
+
+                if self.lidar_augment:
+                    selected_cav_base['flip'] = flip
+                    selected_cav_base['noise_rotation'] = noise_rotation
+                    selected_cav_base['noise_scale'] = noise_scale
+
                 selected_cav_processed = self.get_item_single_car(
                     selected_cav_base,
                     ego_cav_base, cav_id)
@@ -343,7 +404,7 @@ def getAgnosticFusionDataset(cls):
                 if self.visualize:
                     projected_lidar_stack.append(
                         selected_cav_processed['projected_lidar'])
-                
+              
                 if self.supervise_single:
                     # single_label_list.append(selected_cav_processed['single_label_dict'])
                     # single_object_bbx_center_list.append(selected_cav_processed['single_object_bbx_center'])
@@ -351,8 +412,10 @@ def getAgnosticFusionDataset(cls):
                     processed_data_dict[cav_id]['single_label_dict'] = self.post_processor.collate_batch([selected_cav_processed['single_label_dict']])
                     processed_data_dict[cav_id]['single_object_bbx_center'] = torch.from_numpy(selected_cav_processed['single_object_bbx_center']).unsqueeze(0)
                     processed_data_dict[cav_id]['single_object_bbx_mask'] = torch.from_numpy(selected_cav_processed['single_object_bbx_mask']).unsqueeze(0)
+                    processed_data_dict[cav_id]['single_object_ids'] = selected_cav_processed['single_object_ids']
                     processed_data_dict[cav_id]['transformation_matrix'] = selected_cav_processed['transformation_matrix']
                     processed_data_dict[cav_id]['anchor_box'] = selected_cav_processed['anchor_box']
+                    processed_data_dict[cav_id]['single_seg_label'] = torch.from_numpy(selected_cav_processed['single_seg_label']).unsqueeze(0) if selected_cav_processed['single_seg_label'] is not None else None
 
             # generate single view GT label
             # if self.supervise_single:
@@ -441,6 +504,8 @@ def getAgnosticFusionDataset(cls):
                 targets_single = {cav_id:[] for cav_id in batch[0] if cav_id != 'ego'}
                 object_bbx_center_single = {cav_id:[] for cav_id in batch[0] if cav_id != 'ego'}
                 object_bbx_mask_single = {cav_id:[] for cav_id in batch[0] if cav_id != 'ego'}
+                object_ids_single = {cav_id:[] for cav_id in batch[0] if cav_id != 'ego'}
+                object_seg_label_single = {cav_id:[] for cav_id in batch[0] if cav_id != 'ego'}
 
             for i in range(len(batch)):
                 ego_dict = batch[i].pop('ego')
@@ -476,7 +541,9 @@ def getAgnosticFusionDataset(cls):
                         targets_single[cav_id].append(instance_dict['single_label_dict']['targets'])
                         object_bbx_center_single[cav_id].append(instance_dict['single_object_bbx_center'])
                         object_bbx_mask_single[cav_id].append(instance_dict['single_object_bbx_mask'])
-
+                        object_ids_single[cav_id].append(instance_dict['single_object_ids'])
+                        if instance_dict['single_seg_label'] is not None:
+                            object_seg_label_single[cav_id].append(instance_dict['single_seg_label'])
 
             # convert to numpy, (B, max_num, 7)
             object_bbx_center = torch.from_numpy(np.array(object_bbx_center))
@@ -549,10 +616,13 @@ def getAgnosticFusionDataset(cls):
                                 "targets": torch.cat(targets_single[cav_id], dim=0),
                                 # for centerpoint
                                 "object_bbx_center_single": torch.cat(object_bbx_center_single[cav_id], dim=0),
-                                "object_bbx_mask_single": torch.cat(object_bbx_mask_single[cav_id], dim=0)
+                                "object_bbx_mask_single": torch.cat(object_bbx_mask_single[cav_id], dim=0),
+                                "object_ids_single": object_ids_single[cav_id][0],
+                                "object_seg_label": torch.cat(object_seg_label_single[cav_id], dim=0) if len(object_seg_label_single[cav_id])>0 else None
                             },
                         "object_bbx_center_single": torch.cat(object_bbx_center_single[cav_id], dim=0),
-                        "object_bbx_mask_single": torch.cat(object_bbx_mask_single[cav_id], dim=0)
+                        "object_bbx_mask_single": torch.cat(object_bbx_mask_single[cav_id], dim=0),
+                        "object_ids_single": object_ids_single[cav_id][0]
                     })
 
             return output_dict

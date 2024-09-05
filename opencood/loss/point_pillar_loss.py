@@ -63,6 +63,15 @@ class PointPillarLoss(nn.Module):
         if f'dm{suffix}' in output_dict:
             output_dict[f'dir_preds{suffix}'] = output_dict[f'dm{suffix}']
 
+        ######### segmentation loss #########
+        if 'seg_preds' in output_dict:
+            seg_preds = output_dict["seg_preds"] # B, 2, H, W
+            seg_target = target_dict['object_seg_label'].long() # B, H, W
+            weight_vector = torch.tensor([0.005, 1.0]).cuda()
+            seg_loss = nn.CrossEntropyLoss(weight=weight_vector)(seg_preds, seg_target)
+            self.loss_dict.update({'seg_loss': seg_loss.item()})
+            return seg_loss
+        
         total_loss = 0
 
         # cls loss
@@ -186,12 +195,13 @@ class PointPillarLoss(nn.Module):
         cls_loss = self.loss_dict.get('cls_loss', 0)
         dir_loss = self.loss_dict.get('dir_loss', 0)
         iou_loss = self.loss_dict.get('iou_loss', 0)
+        seg_loss = self.loss_dict.get('seg_loss', 0)
 
 
         print("[epoch %d][%d/%d]%s || Loss: %.4f || Conf Loss: %.4f"
-              " || Loc Loss: %.4f || Dir Loss: %.4f || IoU Loss: %.4f" % (
+              " || Loc Loss: %.4f || Dir Loss: %.4f || IoU Loss: %.4f || Seg Loss: %.4f" % (
                   epoch, batch_id + 1, batch_len, suffix,
-                  total_loss, cls_loss, reg_loss, dir_loss, iou_loss))
+                  total_loss, cls_loss, reg_loss, dir_loss, iou_loss, seg_loss))
 
         if not writer is None:
             writer.add_scalar('Regression_loss'+suffix, reg_loss,

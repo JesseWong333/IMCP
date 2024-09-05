@@ -139,3 +139,5 @@ logs/
 dataset
 opencood/logs
 ./vscode
+
+/tmp

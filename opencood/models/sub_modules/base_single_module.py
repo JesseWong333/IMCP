@@ -76,6 +76,17 @@ class PointPillar(nn.Module):
             self.backbone = BaseBEVBackbone(args['base_bev_backbone'], 64)
         else:
             self.backbone = ResNetBEVBackbone(args['base_bev_backbone'], 64)
+        if 'shrink_header' in args:
+            self.shrink_flag = True
+            self.shrink_conv = DownsampleConv(args['shrink_header'])
+        else:
+            self.shrink_flag = False
+
+        self.seg_flag = args['single_seg_head'] if 'single_seg_head' in args else False
+        
+        if self.seg_flag:
+            self.single_seg_head = nn.Conv2d(args['head_embed_dims'], 2, kernel_size=1)
+     
         self.single_cls_head = nn.Conv2d(args['head_embed_dims'], args['anchor_number'], # 384
                                   kernel_size=1)
         self.single_reg_head = nn.Conv2d(args['head_embed_dims'], 7 * args['anchor_number'], # 384
@@ -86,10 +97,15 @@ class PointPillar(nn.Module):
         batch_dict = self.pillar_vfe(batch_dict)  # 这里是其提取特征的方式，不同的方法应该不同
         batch_dict = self.scatter(batch_dict)
         batch_dict, ret_dict = self.backbone(batch_dict)  # ret_dict存放了多个级别的特征
+        if self.shrink_flag:
+            batch_dict['spatial_features_2d'] = self.shrink_conv(batch_dict['spatial_features_2d'])
         psm_single = self.single_cls_head(batch_dict['spatial_features_2d'])
         rm_single = self.single_reg_head(batch_dict['spatial_features_2d'])
         output_dict = {'cls_preds': psm_single,
                         'reg_preds': rm_single}
+        if self.seg_flag:
+            seg_single = self.single_seg_head(batch_dict['spatial_features_2d'])
+            output_dict.update({'seg_preds': seg_single})
         multi_feature = [ret_dict[key] for key in ret_dict]
         return multi_feature, output_dict
 
@@ -145,6 +161,8 @@ class DeforEncoderFusion(nn.Module):
 
         self.bev_h = model_cfg["bev_h"] # 100
         self.bev_w = model_cfg["bev_w"] # 252
+        self.discrete_ratio = model_cfg["discrete_ratio"]
+
         self.embed_dims = model_cfg["embed_dims"]  # 128
 
         self.agent_names = model_cfg["agent_names"] # 
@@ -169,7 +187,7 @@ class DeforEncoderFusion(nn.Module):
         self.agent_lvl_embeds = nn.ParameterDict(agent_lvl_embeding_dict)
         
         # adapter
-        n_adapter_layers = model_cfg['n_adapters']
+        n_adapter_layers =  model_cfg['n_adapters'] if 'n_adapters' in model_cfg else 0
         adapter_dict = OrderedDict()
         for name, in_out_channels in model_cfg['adapters'].items():
             adapter_dict[name] = self.create_adapter(in_out_channels[0], in_out_channels[1], name, n_adapter_layers)
@@ -221,10 +239,10 @@ class DeforEncoderFusion(nn.Module):
         # todo: magic number
         pairwise_t_matrix = pairwise_t_matrix_c.clone() # avoid in-place
         pairwise_t_matrix = pairwise_t_matrix[:,:,:,[0, 1],:][:,:,:,:,[0, 1, 3]] # [B, L, L, 2, 3]
-        pairwise_t_matrix[...,0,1] = pairwise_t_matrix[...,0,1] * 100 / 252
-        pairwise_t_matrix[...,1,0] = pairwise_t_matrix[...,1,0] * 252 / 100
-        pairwise_t_matrix[...,0,2] = pairwise_t_matrix[...,0,2] / (0.8 * 252) * 2
-        pairwise_t_matrix[...,1,2] = pairwise_t_matrix[...,1,2] / (0.8 * 100) * 2
+        pairwise_t_matrix[...,0,1] = pairwise_t_matrix[...,0,1] * self.bev_h / self.bev_w
+        pairwise_t_matrix[...,1,0] = pairwise_t_matrix[...,1,0] * self.bev_w / self.bev_h
+        pairwise_t_matrix[...,0,2] = pairwise_t_matrix[...,0,2] / (self.discrete_ratio * self.bev_w) * 2
+        pairwise_t_matrix[...,1,2] = pairwise_t_matrix[...,1,2] / (self.discrete_ratio * self.bev_h) * 2
         return pairwise_t_matrix
     
     def forward(self, mlvl_feats, pairwise_t_matrix):

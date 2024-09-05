@@ -13,11 +13,13 @@ from opencood.hypes_yaml.yaml_utils import load_yaml
 from opencood.utils.pcd_utils import downsample_lidar_minimum
 from opencood.utils.camera_utils import load_camera_data, load_intrinsic_DAIR_V2X
 from opencood.utils.common_utils import read_json
+from opencood.utils import box_utils
 from opencood.utils.transformation_utils import tfm_to_pose, rot_and_trans_to_trasnformation_matrix
 from opencood.utils.transformation_utils import veh_side_rot_and_trans_to_trasnformation_matrix
 from opencood.utils.transformation_utils import inf_side_rot_and_trans_to_trasnformation_matrix
 from opencood.data_utils.pre_processor import build_preprocessor
 from opencood.data_utils.post_processor import build_postprocessor
+from PIL import Image, ImageDraw
 
 class DAIRV2XBaseDataset(Dataset):
     def __init__(self, params, visualize, train=True):
@@ -40,8 +42,8 @@ class DAIRV2XBaseDataset(Dataset):
         self.post_processor_i.generate_gt_bbx = self.post_processor_i.generate_gt_bbx_by_iou
         self.post_processor_v.generate_gt_bbx = self.post_processor_v.generate_gt_bbx_by_iou
 
-        self.data_augmentor = DataAugmentor(params['data_augment'],
-                                            train)
+        # self.data_augmentor = DataAugmentor(params['data_augment'],
+        #                                     train)
 
         if 'clip_pc' in params['fusion']['args'] and params['fusion']['args']['clip_pc']:
             self.clip_pc = True
@@ -116,8 +118,6 @@ class DAIRV2XBaseDataset(Dataset):
         data[0]['params'] = OrderedDict()
         data[1]['params'] = OrderedDict()
 
-        
-        
         # pose of agent 
         lidar_to_novatel = read_json(os.path.join(self.root_dir,'vehicle-side/calib/lidar_to_novatel/'+str(veh_frame_id)+'.json'))
         novatel_to_world = read_json(os.path.join(self.root_dir,'vehicle-side/calib/novatel_to_world/'+str(veh_frame_id)+'.json'))
@@ -240,3 +240,39 @@ class DAIRV2XBaseDataset(Dataset):
         object_bbx_mask = tmp_dict['object_bbx_mask']
 
         return lidar_np, object_bbx_center, object_bbx_mask
+    
+    def shape_to_mask(self, rects, shape_type=None,
+                  line_width=2, point_size=2):
+        img_shape = [self.params['bev_h'], self.params['bev_w']]
+        mask = np.zeros(img_shape[:2], dtype=np.uint8)
+        mask = Image.fromarray(mask)
+        draw = ImageDraw.Draw(mask)
+
+        for rect in rects:
+            xy = [(point[0], point[1]) for point in rect]
+            draw.polygon(xy=xy, outline=1, fill=1) # xy 为[(x,y),(x.y),(...,...),...]
+        mask = np.array(mask)
+        return mask
+
+    def scale_boxes(self, boxes):
+        # boxes: N, 4, 2
+        # scale_y = 100 / (40*2)
+        # scale_x = 252 / (100.8*2)
+        pc_range = self.params[self.params['method_i']]["preprocess"]['cav_lidar_range']
+        bev_shape = [self.params['bev_h'], self.params['bev_w']]
+
+        scale_y = bev_shape[0] / (pc_range[4] - pc_range[1])
+        scale_x = bev_shape[1] / (pc_range[3] - pc_range[0])
+
+        boxes[:, :, 0] = (boxes[:, :, 0] - pc_range[0])* scale_x
+        boxes[:, :, 1] = (boxes[:, :, 1] - pc_range[1])* scale_y
+   
+        return boxes
+
+    def create_seg_mask(self, object_bbx_center, object_bbx_mask):
+        object_bbx = object_bbx_center[object_bbx_mask==1]
+        objects_2d = box_utils.boxes_to_corners2d(object_bbx, 'hwl')
+        
+        label_objects = self.scale_boxes(objects_2d)
+        seg_mask = self.shape_to_mask(label_objects)
+        return seg_mask
