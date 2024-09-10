@@ -9,7 +9,7 @@ class SSFA(nn.Module):
         self._num_input_features = args['feature_num']  # 128
 
         seq = [nn.ZeroPad2d(1)]
-        seq += get_conv_layers('Conv2d', 128, 128, n_layers=3, kernel_size=[3, 3, 3],
+        seq += get_conv_layers('Conv2d', self._num_input_features, 128, n_layers=3, kernel_size=[3, 3, 3],
                                                   stride=[1, 1, 1], padding=[0, 1, 1], sequential=False)
         self.bottom_up_block_0 = nn.Sequential(*seq)
         self.bottom_up_block_1 = get_conv_layers('Conv2d', 128, 256, n_layers=3, kernel_size=[3, 3, 3],

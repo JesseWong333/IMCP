@@ -27,29 +27,32 @@ import peft.tuners.ia3 as ia3
 from mmdet.models.utils import LearnedPositionalEncoding
 from torch.nn.init import normal_
 
-def conv3x3(in_planes, out_planes, stride=1):
+def conv3x3(in_planes, out_planes, lora_rank=0, stride=1):
     "3x3 convolution with padding"
-    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
-                     padding=1, bias=False)
+    return lora.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
+                     padding=1, bias=False, r=lora_rank)
+
+def conv1x1(in_planes, out_planes, lora_rank=0, stride=1):
+    "1x1 convolution with padding"
+    return lora.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride,
+                     padding=1, bias=False, r=lora_rank)
 
 class Adapter(nn.Module):
-    def __init__(self, input_filter, output_filter, n_layers=3):
+    def __init__(self, input_filter, output_filter, n_layers=3, lora_rank=0):
         super().__init__()
         # 针对每一个特征级别
         self.conv0 = nn.Sequential(
-                nn.Conv2d(input_filter, output_filter, kernel_size=1), 
+                lora.Conv2d(input_filter, output_filter, kernel_size=1, r=lora_rank),
                 nn.BatchNorm2d(output_filter),
+                nn.ReLU(inplace=True)
             )
         
         layers = []
         for _ in range(n_layers):
             layers.append(nn.Sequential(
-                conv3x3(output_filter, output_filter),
+                conv3x3(output_filter, output_filter, lora_rank),
                 nn.BatchNorm2d(output_filter),
-                nn.ReLU(inplace=True),
-                # Conv2
-                conv3x3(output_filter, output_filter),
-                nn.BatchNorm2d(output_filter)))
+                ))
         self.layers = nn.ModuleList(layers)
 
     def forward(self, x):
@@ -171,7 +174,7 @@ class DeforEncoderFusion(nn.Module):
         self.lora_rank = model_cfg["lora_rank"]
 
         # bev 
-        self.bev_embedding = lora.Embedding(self.bev_h * self.bev_w, self.embed_dims, r = self.lora_rank)
+        self.bev_embedding = lora.Embedding(self.bev_h * self.bev_w, self.embed_dims, r = 0)
         self.bev_index = torch.linspace(0, self.bev_h * self.bev_w -1, self.bev_h * self.bev_w, dtype=torch.long).cuda()
 
         self.positional_encoding = LearnedPositionalEncoding(        
@@ -190,13 +193,13 @@ class DeforEncoderFusion(nn.Module):
         n_adapter_layers =  model_cfg['n_adapters'] if 'n_adapters' in model_cfg else 0
         adapter_dict = OrderedDict()
         for name, in_out_channels in model_cfg['adapters'].items():
-            adapter_dict[name] = self.create_adapter(in_out_channels[0], in_out_channels[1], name, n_adapter_layers)
+            adapter_dict[name] = self.create_adapter(in_out_channels[0], in_out_channels[1], name, n_adapter_layers, self.lora_rank)
         self.adapters = nn.ModuleDict(adapter_dict)
 
         self.cls_head = lora.Conv2d(model_cfg['head_embed_dims'], model_cfg['anchor_number'],
-                                  kernel_size=1, r = self.lora_rank)
+                                  kernel_size=1, r = 0)
         self.reg_head = lora.Conv2d(model_cfg['head_embed_dims'], 7 * model_cfg['anchor_number'],
-                                  kernel_size=1, r = self.lora_rank)
+                                  kernel_size=1, r = 0)
 
     # def create_adapter(self, input_filters, output_filters):
     #     adapter_list = []
@@ -207,7 +210,7 @@ class DeforEncoderFusion(nn.Module):
     #         ))
     #     return nn.ModuleList(adapter_list)
     
-    def create_adapter(self, input_filters, output_filters, name, n_adapter_layers):
+    def create_adapter(self, input_filters, output_filters, name, n_adapter_layers, lora_rank):
         adapter_list = []
         if name == 'ego':
             for i in range(len(input_filters)):
@@ -217,7 +220,7 @@ class DeforEncoderFusion(nn.Module):
                 ))
         else:
             for i in range(len(input_filters)):
-                adapter_list.append(Adapter(input_filters[i], output_filters[i], n_adapter_layers))
+                adapter_list.append(Adapter(input_filters[i], output_filters[i], n_adapter_layers, lora_rank))
         return nn.ModuleList(adapter_list)
 
     @staticmethod

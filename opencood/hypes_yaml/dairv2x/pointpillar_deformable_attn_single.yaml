@@ -1,4 +1,4 @@
-name: pointpillar_second_0_0_adapter_1
+name: i_second_different_initialization
 data_dir: "/hd_cache/datasets/DAIR-V2X/cooperative-vehicle-infrastructure"
 root_dir: "/data/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/train.json"
 validate_dir: "/data/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/val.json"
@@ -12,13 +12,13 @@ test_dir: "/data/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/val.json"
 load_history: false
 bev_h: &bev_h 100
 bev_w: &bev_w 252
-train_agent_ID: &train_agent_ID -1  # -1为协同训练，0,1,2为各自的ID； 0是ego, 1是infra
+train_agent_ID: &train_agent_ID 1  # -1为协同训练，0,1,2为各自的ID； 0是ego, 1是infra
 
 method_v: &method_v point_pillar
 method_i: &method_i second
 
 # method_v_path: ./opencood/logs/v_point_pillar_2024_08_01_17_43_01/net_epoch_bestval_at13.pth
-method_ego_path: ./opencood/logs/ego_pointpillar_2024_08_13_13_06_12/net_epoch_bestval_at13.pth
+method_ego_path: ./opencood/logs/ego_pointpillar_2024_08_08_21_22_48/net_epoch13.pth
 method_i_path: ./opencood/logs/i_second_100_252_2024_08_02_21_08_47/net_epoch_bestval_at17.pth
 
 noise_setting:
@@ -29,16 +29,27 @@ noise_setting:
     pos_mean: 0
     rot_mean: 0
 
-yaml_parser: ["load_point_pillar_params", "load_second_params"]
+yaml_parser: ["load_point_pillar_params", "load_second_params", "load_lift_splat_shoot_params"]
 train_params:
   batch_size: &batch_size 4
-  epoches: 20
+  epoches: 30
   eval_freq: 2
   save_freq: 2
   max_cav: &max_cav 2
 
 input_source: ['lidar']
 label_type: 'lidar'
+
+camera_data_aug_conf: &data_aug_conf
+        resize_lim: [0.27, 0.28]
+        final_dim: [288, 512]  # 
+        rot_lim: [0, 0]
+        H: 1080   # 原始图片大小
+        W: 1920
+        rand_flip: False
+        bot_pct_lim: [0.0, 0.05]
+        cams: ['camera0', 'camera1', 'camera2', 'camera3']
+        Ncams: 4
 
 comm_range: 1000
 
@@ -47,7 +58,6 @@ fusion:
   dataset: 'dairv2x'
   args: 
     proj_first: false
-
 
 # 不同的方法有不同的前处理和后处理
 point_pillar:
@@ -123,6 +133,42 @@ second:
     #   num_bins: 2
     #   anchor_yaw: *anchor_yaw
 
+lss: 
+  preprocess:
+    # options: BasePreprocessor, VoxelPreprocessor, BevPreprocessor
+    core_method: 'SpVoxelPreprocessor'
+    args:
+      voxel_size: &lss_voxel_size [0.4, 0.4, 5]
+      max_points_per_voxel: 32
+      max_voxel_train: 32000
+      max_voxel_test: 70000
+    # detection range for each individual cav.
+    cav_lidar_range: &lss_cav_lidar [-100.8, -40, -3.5, 100.8, 40, 1.5]
+
+  postprocess:
+    postprocess:
+    core_method: 'VoxelPostprocessor' # That's ok
+    gt_range: *lss_cav_lidar
+    anchor_args:
+      cav_lidar_range: *lss_cav_lidar
+      l: 3.9
+      w: 1.6
+      h: 1.56
+      feature_stride: 2
+      r: [0, 90]
+      num: 2
+    target_args:
+      pos_threshold: 0.6
+      neg_threshold: 0.45
+      score_threshold: 0.25
+    order: 'hwl' # hwl or lwh
+    max_num: 100
+    nms_thresh: 0.15
+    # dir_args: &dir_args
+    #   dir_offset: 0.7853
+    #   num_bins: 2
+    #   anchor_yaw: *anchor_yaw
+
 
 # model related
 model:
@@ -187,59 +233,82 @@ model:
         dim: [ 128 ]
         input_dim: 128 
 
+    lss:
+      anchor_number: 2
+      grid_conf: &grid_conf
+        # -100.8, -40, -3.5, 100.8, 40, 1.5
+        xbound: [-100.8, 100.8, 0.4]   # 需要和preprocess一致. Need to be consistent with preprocess.
+        ybound: [-40, 40, 0.4]   # 需要和preprocess一致. Need to be consistent with preprocess.
+        zbound: [-10, 10, 20.0]   # 不需要和preprocess一致. NO Need to be consistent with preprocess.
+        ddiscr: [2, 100, 98]  # not used
+        mode: 'LID' # or 'UD' # not used
+      data_aug_conf: *data_aug_conf
+      # dir_args: *dir_args
+      img_downsample: 8
+      img_features: 128
+      use_depth_gt: false
+      depth_supervision: false
+      bevout_feature: 128
+
+      shrink_header:
+        kernal_size: [ 3 ]
+        stride: [ 2 ]
+        padding: [ 1 ]
+        dim: [ 128 ]
+        input_dim: 128
+      camera_encoder: EfficientNet
+
     # Fusion method
+    defor_encoder_fusion: 
+      bev_h: *bev_h
+      bev_w: *bev_w
+      embed_dims: &embed_dims 128 # 128 for multi-scale; 384 for single scale
+      max_num_agent: *max_cav
+      agent_names: &agent_names ["ego"]
+      feature_levels: &feature_levels [3]
+      lora_rank: 0
+
+      anchor_number: 2
+      # adapter parameters
+      adapters: 
+        ego: [[64, 128, 256], [128, 128, 128]]
+        # point_pillar: [[64, 128, 256], [128, 128, 128]]
+        # second: [[384], [128]]     
+
+      # cross first
+      block_cfgs: [[*embed_dims, 8, 8, 8, 8, 0.1, *agent_names, *feature_levels, 0, ["cross_attn", "norm", "ffn", "norm"]],
+                  [*embed_dims, 8, 8, 8, 8, 0.1, *agent_names, *feature_levels, 0, ["cross_attn", "norm", "ffn", "norm"]],
+                  [*embed_dims, 8, 8, 8, 8, 0.1, *agent_names, *feature_levels, 0, ["cross_attn", "norm", "ffn", "norm"]],
+                  [*embed_dims, 8, 8, 8, 8, 0.1, *agent_names, *feature_levels, 0, ["cross_attn", "norm", "ffn", "norm"]],
+                [*embed_dims, 8, 8, 8, 8, 0.1, *agent_names, *feature_levels, 0, ["self_attn", "norm", "ffn", "norm"]],
+                [*embed_dims, 8, 8, 8, 8, 0.1, *agent_names, *feature_levels, 0, ["self_attn", "norm", "ffn", "norm"]]]
+  
+      head_embed_dims: *embed_dims
+    
     # defor_encoder_fusion: 
     #   bev_h: *bev_h
     #   bev_w: *bev_w
     #   embed_dims: &embed_dims 128 # 128 for multi-scale; 384 for single scale
     #   max_num_agent: *max_cav
-    #   agent_names: &agent_names ["ego"]
-    #   feature_levels: &feature_levels [3]
-    #   lora_rank: 0
-
+    #   agent_names: &agent_names ["ego", "second"]
+    #   feature_levels: &feature_levels [3, 1]
+    #   lora_rank: 16
     #   anchor_number: 2
     #   # adapter parameters
     #   adapters: 
     #     ego: [[64, 128, 256], [128, 128, 128]]
     #     # point_pillar: [[64, 128, 256], [128, 128, 128]]
-    #     # second: [[384], [128]]     
+    #     second: [[128], [128]]     
 
     #   # cross first
-    #   block_cfgs: [[*embed_dims, 8, 8, 8, 8, 0.1, *agent_names, *feature_levels, 0, ["cross_attn", "norm", "ffn", "norm"]],
-    #               [*embed_dims, 8, 8, 8, 8, 0.1, *agent_names, *feature_levels, 0, ["cross_attn", "norm", "ffn", "norm"]],
-    #               [*embed_dims, 8, 8, 8, 8, 0.1, *agent_names, *feature_levels, 0, ["cross_attn", "norm", "ffn", "norm"]],
-    #               [*embed_dims, 8, 8, 8, 8, 0.1, *agent_names, *feature_levels, 0, ["cross_attn", "norm", "ffn", "norm"]],
-    #             [*embed_dims, 8, 8, 8, 8, 0.1, *agent_names, *feature_levels, 0, ["self_attn", "norm", "ffn", "norm"]],
-    #             [*embed_dims, 8, 8, 8, 8, 0.1, *agent_names, *feature_levels, 0, ["self_attn", "norm", "ffn", "norm"]]]
+    #   block_cfgs: [[*embed_dims, 8, 8, 8, 8, 0.1, *agent_names, *feature_levels, 16, ["cross_attn", "norm", "ffn", "norm"]],
+    #               [*embed_dims, 8, 8, 8, 8, 0.1, *agent_names, *feature_levels, 16, ["cross_attn", "norm", "ffn", "norm"]],
+    #               [*embed_dims, 8, 8, 8, 8, 0.1, *agent_names, *feature_levels, 16, ["cross_attn", "norm", "ffn", "norm"]],
+    #               [*embed_dims, 8, 8, 8, 8, 0.1, *agent_names, *feature_levels, 16, ["cross_attn", "norm", "ffn", "norm"]],
+    #               [*embed_dims, 8, 8, 8, 8, 0.1, *agent_names, *feature_levels, 16, ["self_attn", "norm", "ffn", "norm"]],
+    #               [*embed_dims, 8, 8, 8, 8, 0.1, *agent_names, *feature_levels, 16, ["self_attn", "norm", "ffn", "norm"]]]
   
     #   head_embed_dims: *embed_dims
-    
-    defor_encoder_fusion: 
-      bev_h: *bev_h
-      bev_w: *bev_w
-      discrete_ratio: 0.8
-      embed_dims: &embed_dims 128 # 128 for multi-scale; 384 for single scale
-      max_num_agent: *max_cav
-      agent_names: &agent_names ["ego", "second_v"]
-      feature_levels: &feature_levels [3, 1]
-      lora_rank: 0
-      anchor_number: 2
-      # adapter parameters
-      n_adapters: 1
-      adapters: 
-        ego: [[64, 128, 256], [128, 128, 128]]
-        # point_pillar: [[64, 128, 256], [128, 128, 128]]
-        second_v: [[128], [128]]     
-
-      # cross first
-      block_cfgs: [[*embed_dims, 8, 8, 8, 8, 0.1, *agent_names, *feature_levels, 0, 0, ["cross_attn", "norm", "ffn", "norm"]],
-                  [*embed_dims, 8, 8, 8, 8, 0.1, *agent_names, *feature_levels, 0, 0, ["cross_attn", "norm", "ffn", "norm"]],
-                  [*embed_dims, 8, 8, 8, 8, 0.1, *agent_names, *feature_levels, 0, 0, ["cross_attn", "norm", "ffn", "norm"]],
-                  [*embed_dims, 8, 8, 8, 8, 0.1, *agent_names, *feature_levels, 0, 0, ["cross_attn", "norm", "ffn", "norm"]],
-                  [*embed_dims, 8, 8, 8, 8, 0.1, *agent_names, *feature_levels, 0, 0,  ["self_attn", "norm", "ffn", "norm"]],
-                  [*embed_dims, 8, 8, 8, 8, 0.1, *agent_names, *feature_levels, 0, 0, ["self_attn", "norm", "ffn", "norm"]]]
-  
-      head_embed_dims: *embed_dims
     # # dir_args: *dir_args
 
 loss:

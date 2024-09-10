@@ -11,7 +11,7 @@
             "program": "${file}",
             "console": "integratedTerminal",
             "env":{
-                "CUDA_VISIBLE_DEVICES": "0",
+                "CUDA_VISIBLE_DEVICES": "1",
                 // "CUDA_LAUNCH_BLOCKING": "1",
                 "DISPLAY": ":1.0"
             },
@@ -22,8 +22,11 @@
             //     // "./opencood/hypes_yaml/v2v4real/pointpillar_deformable_attn_coop_single.yaml"
             //     // "./opencood/hypes_yaml/dairv2x/i_single_pointpillar_seg_task.yaml"
             //     // "./opencood/hypes_yaml/dairv2x/pointpillar_deformable_attn_coop_extend_point_pillar.yaml"
-            //     // "./opencood/hypes_yaml/v2v4real/pointpillar_deformable_attn_coop_point_pillar_extend_point_pillar.yaml"
-            //     "./opencood/hypes_yaml/dairv2x/pointpillar_deformable_attn_coop_extend_point_pillar_seg.yaml"
+            //     //./opencood/hypes_yaml/v2v4real/pointpillar_deformable_attn_coop_point_pillar_extend_point_pillar.yaml"
+            //     // "./opencood/hypes_yaml/dairv2x/pointpillar_deformable_attn_coop_extend_point_pillar_seg.yaml"
+            //     // "./opencood/hypes_yaml/v2v4real/pointpillar_deformable_attn_coop_point_pillar_extend_second.yaml"
+            //     // "./opencood/hypes_yaml/dairv2x/pointpillar_deformable_attn_single.yaml"
+            //      "./opencood/hypes_yaml/dairv2x/pointpillar_deformable_attn_coop_extend_second.yaml"
             // ]
 
             // eval 
@@ -38,7 +41,7 @@
                 // "--fusion_method", "single_w_id"
                 //  "--model_dir", "./opencood/logs/i_second_100_252_2024_08_02_21_08_47",
                 // "--fusion_method", "single_w_id"
-                 "--model_dir", "./opencood/logs/pointpillar_pointpillar_seg_lora_0_0_adapter_3_2024_09_05_18_04_37",
+                 "--model_dir", "./opencood/logs/pointpillar_second_0_0_adapter_1_2024_09_10_16_57_27",
                 "--fusion_method", "intermediate"
             ]
         

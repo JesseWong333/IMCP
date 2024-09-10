@@ -1,4 +1,4 @@
-name: test_pointpillar_pointpillar_lora_0_0_adapter_5
+name: pointpillar_pointpillar_lora_0_0_adapter_1
 data_dir: "/hd_cache/datasets/DAIR-V2X/cooperative-vehicle-infrastructure"
 root_dir: "/data/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/train.json"
 validate_dir: "/data/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/val.json"
@@ -235,7 +235,7 @@ model:
       lora_rank: 0
       anchor_number: 2
       # adapter parameters
-      n_adapters: 5
+      n_adapters: 1
       adapters: 
         ego: [[64, 128, 256], [128, 128, 128]]
         point_pillar_v: [[64, 128, 256], [128, 128, 128]]
