@@ -141,3 +141,8 @@ opencood/logs
 ./vscode
 
 /tmp
+*.out
+hpc_log
+hpc_other_log
+run_on_hpc.py
+submitit_template.sh
