@@ -227,7 +227,7 @@ model:
       lora_rank: 32
       anchor_number: 2
       # adapter parameters
-      n_adapters: 4
+      n_adapters: 2
       adapters: 
         ego: [[64, 128, 256], [128, 128, 128]]
         # point_pillar: [[64, 128, 256], [128, 128, 128]]

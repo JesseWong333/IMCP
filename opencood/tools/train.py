@@ -85,12 +85,13 @@ def main():
         # -3 finetune lora
         model_dict = torch.load(hypes['model_fusion_path'])
         load_results = model.load_state_dict(model_dict, strict=False)
-        print("load unexpected_keys:" + str(load_results.unexpected_keys))
+        print("unexpected_keys:" + str(load_results.unexpected_keys))
+        print("missing_keys:" + str(load_results.missing_keys))
 
         model_dict = torch.load(hypes['method_i_path_family'])
         load_results = model.load_state_dict(model_dict, strict=False)
         print("load unexpected_keys:" + str(load_results.unexpected_keys))
-        
+
         lora.mark_only_lora_as_trainable(model)
         optimizer = train_utils.setup_optimizer(hypes, model)
 
