@@ -92,7 +92,22 @@ def main():
         load_results = model.load_state_dict(model_dict, strict=False)
         print("load unexpected_keys:" + str(load_results.unexpected_keys))
 
-        lora.mark_only_lora_as_trainable(model)
+        extra_agent_name = hypes['model']['args']['defor_encoder_fusion']['agent_names'][1]
+        print("tuning parameters:")
+        for name, value in model.named_parameters():
+            # only tune Lora and the bias of the BN layers
+            if 'adapters' in name and 'ego' not in name:  # non-ego adapters
+                if 'lora_' in name or 'bias' in name: # lora parameters
+                    value.requires_grad = True
+                    print(name)
+                else:
+                    value.requires_grad = False
+            else:
+                if extra_agent_name in name:
+                    value.requires_grad = True
+                    print(name)
+                else:
+                    value.requires_grad = False
         optimizer = train_utils.setup_optimizer(hypes, model)
 
     # record lowest validation loss checkpoint.
