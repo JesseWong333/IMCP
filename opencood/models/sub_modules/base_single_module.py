@@ -22,7 +22,6 @@ from opencood.models.sub_modules.downsample_conv import DownsampleConv
 from opencood.models.sub_modules.torch_transformation_utils import warp_affine_simple
 
 import loralib as lora
-import peft.tuners.ia3 as ia3
 
 from mmdet.models.utils import LearnedPositionalEncoding
 from torch.nn.init import normal_
@@ -35,7 +34,7 @@ def conv3x3(in_planes, out_planes, lora_rank=0, stride=1):
 def conv1x1(in_planes, out_planes, lora_rank=0, stride=1):
     "1x1 convolution with padding"
     return lora.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride,
-                     padding=1, bias=False, r=lora_rank)
+                     padding=0, bias=False, r=lora_rank)
 
 class Adapter(nn.Module):
     def __init__(self, input_filter, output_filter, n_layers=3, lora_rank=0):

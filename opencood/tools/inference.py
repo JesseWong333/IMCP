@@ -8,7 +8,7 @@ import time
 from typing import OrderedDict
 import importlib
 import torch
-import open3d as o3d
+# import open3d as o3d
 from torch.utils.data import DataLoader, Subset
 import numpy as np
 import opencood.hypes_yaml.yaml_utils as yaml_utils
@@ -203,31 +203,31 @@ def main():
                                      "lidar_agent_record": lidar_agent_record})
 
             # if (i % opt.save_vis_interval == 0) and (pred_box_tensor is not None):
-            if (i % opt.save_vis_interval == 0):
-                vis_save_path_root = os.path.join(opt.model_dir, f'vis_{infer_info}')
-                if not os.path.exists(vis_save_path_root):
-                    os.makedirs(vis_save_path_root)
+            # if (i % opt.save_vis_interval == 0):
+            #     vis_save_path_root = os.path.join(opt.model_dir, f'vis_{infer_info}')
+            #     if not os.path.exists(vis_save_path_root):
+            #         os.makedirs(vis_save_path_root)
 
-                """
-                If you want 3D visualization, uncomment lines below
-                """
-                # vis_save_path = os.path.join(vis_save_path_root, '3d_%05d.png' % i)
-                # simple_vis.visualize(infer_result,
-                #                     batch_data['ego'][
-                #                         'origin_lidar'][0],
-                #                     hypes['postprocess']['gt_range'],
-                #                     vis_save_path,
-                #                     method='3d',
-                #                     left_hand=left_hand)
+            #     """
+            #     If you want 3D visualization, uncomment lines below
+            #     """
+            #     # vis_save_path = os.path.join(vis_save_path_root, '3d_%05d.png' % i)
+            #     # simple_vis.visualize(infer_result,
+            #     #                     batch_data['ego'][
+            #     #                         'origin_lidar'][0],
+            #     #                     hypes['postprocess']['gt_range'],
+            #     #                     vis_save_path,
+            #     #                     method='3d',
+            #     #                     left_hand=left_hand)
                  
-                vis_save_path = os.path.join(vis_save_path_root, 'bev_%05d.png' % i)
-                simple_vis.visualize(infer_result,
-                                    batch_data['ego'][
-                                        'origin_lidar'][0],
-                                    hypes[hypes['method_v']]['postprocess']['gt_range'],
-                                    vis_save_path,
-                                    method='bev',
-                                    left_hand=left_hand)
+            #     vis_save_path = os.path.join(vis_save_path_root, 'bev_%05d.png' % i)
+            #     simple_vis.visualize(infer_result,
+            #                         batch_data['ego'][
+            #                             'origin_lidar'][0],
+            #                         hypes[hypes['method_v']]['postprocess']['gt_range'],
+            #                         vis_save_path,
+            #                         method='bev',
+            #                         left_hand=left_hand)
         torch.cuda.empty_cache()
 
     _, ap50, ap70 = eval_utils.eval_final_results(result_stat,
