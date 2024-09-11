@@ -69,7 +69,7 @@ def main():
         print("load unexpected_keys:" + str(load_results.unexpected_keys))
         
         extra_agent_name = hypes['model']['args']['defor_encoder_fusion']['agent_names'][1]
-        print("tuning paraameters:")
+        print("tuning parameters:")
         for name, value in model.named_parameters():
             # only tune Lora and paeameters assiaated with agent_names
             if 'lora_' in name or extra_agent_name in name:
@@ -80,6 +80,19 @@ def main():
         # setup optimizer
         params = filter(lambda p: p.requires_grad, model.parameters())
         optimizer = train_utils.setup_optimizer(hypes, params)
+
+    elif hypes['train_agent_ID'] == -3:
+        # -3 finetune lora
+        model_dict = torch.load(hypes['model_fusion_path'])
+        load_results = model.load_state_dict(model_dict, strict=False)
+        print("load unexpected_keys:" + str(load_results.unexpected_keys))
+
+        model_dict = torch.load(hypes['method_i_path_family'])
+        load_results = model.load_state_dict(model_dict, strict=False)
+        print("load unexpected_keys:" + str(load_results.unexpected_keys))
+        
+        lora.mark_only_lora_as_trainable(model)
+        optimizer = train_utils.setup_optimizer(hypes, model)
 
     # record lowest validation loss checkpoint.
     lowest_val_loss = 1e5
