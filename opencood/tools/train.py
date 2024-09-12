@@ -97,7 +97,7 @@ def main():
         for name, value in model.named_parameters():
             # only tune Lora and the bias of the BN layers
             if 'adapters' in name and 'ego' not in name:  # non-ego adapters
-                if 'lora_' in name or 'bias' in name: # lora parameters
+                if 'conv0' in name: # lora parameters
                     value.requires_grad = True
                     print(name)
                 else:
