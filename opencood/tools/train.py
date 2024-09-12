@@ -152,17 +152,28 @@ def main():
     for epoch in range(init_epoch, max(epoches, init_epoch)):
         for param_group in optimizer.param_groups:
             print('learning rate %f' % param_group["lr"])
+        
+        cav_id = hypes['train_agent_ID']
+        # the model will be evaluation mode during validation 
+        model.train()
+        if cav_id < 0:
+            model.eval()  # we call eval(), just to avoid the norm layer update
+            extra_agent_name = hypes['model']['args']['defor_encoder_fusion']['agent_names'][1]
+            print("module to train:")
+            for name, module in model.named_modules():
+                if extra_agent_name in name:
+                    print(name)
+                    module.train()
+
         for i, batch_data in enumerate(train_loader):
             if batch_data is None or batch_data['ego']['object_bbx_mask'].sum()==0:
                 continue
-            # the model will be evaluation mode during validation 
-            model.train()
+
             model.zero_grad()
             optimizer.zero_grad()
             batch_data = train_utils.to_device(batch_data, device)
             batch_data['ego']['epoch'] = epoch
             
-            cav_id = hypes['train_agent_ID']
             ouput_dict = model(batch_data)
             
             # train stage
@@ -185,13 +196,12 @@ def main():
             valid_ave_loss = []
 
             with torch.no_grad():
+                model.eval()
                 for i, batch_data in enumerate(val_loader):
                     if batch_data is None:
                         continue
                     model.zero_grad()
                     optimizer.zero_grad()
-                    model.eval()
-
                     batch_data = train_utils.to_device(batch_data, device)
                     batch_data['ego']['epoch'] = epoch
                     ouput_dict = model(batch_data)
