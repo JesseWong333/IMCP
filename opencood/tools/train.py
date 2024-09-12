@@ -260,7 +260,7 @@ def main():
         if 'noise_setting' in hypes and hypes['noise_setting']['add_noise']:
             cmd = f"python opencood/tools/inference_w_noise.py --model_dir {saved_path} --fusion_method {fusion_method}"
         else:
-            cmd = f"python opencood/tools/inference.py --model_dir {saved_path} --fusion_method {fusion_method}"
+            cmd = f"/cephyr/users/junjiewa/Alvis/software/miniconda3/envs/Where2comm/bin/python opencood/tools/inference.py --model_dir {saved_path} --fusion_method {fusion_method}"
         print(f"Running command: {cmd}")
         os.system(cmd)
 
