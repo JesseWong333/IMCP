@@ -1,12 +1,12 @@
-name: pointpillar_pointpillar_seg_lora_0_0_adapter_3
-data_dir: "/hd_cache/datasets/DAIR-V2X/cooperative-vehicle-infrastructure"
-root_dir: "/data/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/train.json"
-validate_dir: "/data/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/val.json"
-test_dir: "/data/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/val.json"
-# data_dir: "/mimer/NOBACKUP/groups/junjie_storage/datasets/DAIR-V2X/cooperative-vehicle-infrastructure"
-# root_dir: "/mimer/NOBACKUP/groups/junjie_storage/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/train.json"
-# validate_dir: "/mimer/NOBACKUP/groups/junjie_storage/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/val.json"
-# test_dir: "/mimer/NOBACKUP/groups/junjie_storage/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/val.json"
+name: pointpillar_pointpillar_seg_adapter_3
+# data_dir: "/hd_cache/datasets/DAIR-V2X/cooperative-vehicle-infrastructure"
+# root_dir: "/data/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/train.json"
+# validate_dir: "/data/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/val.json"
+# test_dir: "/data/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/val.json"
+data_dir: "/mimer/NOBACKUP/groups/junjie_storage/datasets/DAIR-V2X/cooperative-vehicle-infrastructure"
+root_dir: "/mimer/NOBACKUP/groups/junjie_storage/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/train.json"
+validate_dir: "/mimer/NOBACKUP/groups/junjie_storage/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/val.json"
+test_dir: "/mimer/NOBACKUP/groups/junjie_storage/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/val.json"
 
 # 这种情况创建supernet去训练, point_pillar是一种配置， second是一种配置
 load_history: false

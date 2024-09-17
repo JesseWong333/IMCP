@@ -1,12 +1,12 @@
-name: dairv2x_pointpillar_second_conv3x3_adapter2
-data_dir: "/hd_cache/datasets/DAIR-V2X/cooperative-vehicle-infrastructure"
-root_dir: "/data/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/train.json"
-validate_dir: "/data/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/val.json"
-test_dir: "/data/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/val.json"
-# data_dir: "/mimer/NOBACKUP/groups/junjie_storage/datasets/DAIR-V2X/cooperative-vehicle-infrastructure"
-# root_dir: "/mimer/NOBACKUP/groups/junjie_storage/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/train.json"
-# validate_dir: "/mimer/NOBACKUP/groups/junjie_storage/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/val.json"
-# test_dir: "/mimer/NOBACKUP/groups/junjie_storage/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/val.json"
+name: dairv2x_pointpillar_second_conv3x3_adapter2_model_family
+# data_dir: "/hd_cache/datasets/DAIR-V2X/cooperative-vehicle-infrastructure"
+# root_dir: "/data/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/train.json"
+# validate_dir: "/data/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/val.json"
+# test_dir: "/data/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/val.json"
+data_dir: "/mimer/NOBACKUP/groups/junjie_storage/datasets/DAIR-V2X/cooperative-vehicle-infrastructure"
+root_dir: "/mimer/NOBACKUP/groups/junjie_storage/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/train.json"
+validate_dir: "/mimer/NOBACKUP/groups/junjie_storage/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/val.json"
+test_dir: "/mimer/NOBACKUP/groups/junjie_storage/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/val.json"
 
 # 这种情况创建supernet去训练, point_pillar是一种配置， second是一种配置
 load_history: false
@@ -21,7 +21,7 @@ method_i: &method_i second
 method_ego_path: ./opencood/logs/ego_pointpillar_2024_08_13_13_06_12/net_epoch_bestval_at13.pth
 method_i_path: ./opencood/logs/i_second_100_252_2024_08_02_21_08_47/net_epoch_bestval_at17.pth
 method_i_path_family: ./opencood/logs/i_second_different_initialization_2024_09_10_16_12_42/net_epoch_bestval_at13.pth
-model_fusion_path: ./opencood/logs/dairv2x_pointpillar_second_adapter2_2024_09_10_23_48_10/net_epoch_bestval_at15.pth
+model_fusion_path: ./opencood/logs/dairv2x_pointpillar_second_conv3x3_adapter2_2024_09_12_12_52_33/net_epoch_bestval_at13.pth
 
 noise_setting:
   add_noise: false
