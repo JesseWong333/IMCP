@@ -36,6 +36,37 @@ def conv1x1(in_planes, out_planes, lora_rank=0, stride=1):
     return lora.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride,
                      padding=0, bias=False, r=lora_rank)
 
+class AdapterDouble(nn.Module):
+    def __init__(self, input_filter, output_filter, n_layers=3, lora_rank=0):
+        super().__init__()
+        # 针对每一个特征级别
+        self.conv0 = nn.Sequential(
+                lora.Conv2d(input_filter, output_filter, kernel_size=1, r=lora_rank),
+                nn.BatchNorm2d(output_filter)
+            )
+        
+        layers = []
+        for _ in range(n_layers):
+            layers.append(nn.Sequential(
+                conv3x3(output_filter, output_filter, lora_rank),
+                nn.BatchNorm2d(output_filter),
+                nn.ReLU(inplace=True),
+                conv3x3(output_filter, lora_rank),
+                nn.BatchNorm2d(output_filter),
+                ))
+        self.layers = nn.ModuleList(layers)
+
+    def forward(self, x):
+        x = self.conv0(x)
+        residual = x
+        for layer in self.layers:
+            x = layer(x)
+            # F(x)+x
+            x += residual
+            x = F.relu(x)
+            residual = x
+        return x
+    
 class Adapter(nn.Module):
     def __init__(self, input_filter, output_filter, n_layers=3, lora_rank=0):
         super().__init__()
@@ -219,7 +250,7 @@ class DeforEncoderFusion(nn.Module):
                 ))
         else:
             for i in range(len(input_filters)):
-                adapter_list.append(Adapter(input_filters[i], output_filters[i], n_adapter_layers, lora_rank))
+                adapter_list.append(AdapterDouble(input_filters[i], output_filters[i], n_adapter_layers, lora_rank))
         return nn.ModuleList(adapter_list)
 
     @staticmethod

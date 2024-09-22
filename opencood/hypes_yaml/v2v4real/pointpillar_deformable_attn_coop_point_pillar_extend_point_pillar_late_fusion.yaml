@@ -1,18 +1,11 @@
-<<<<<<< HEAD
 name: v2v4real_pointpillar_extend_pointpillar_adaper3
-# root_dir: '/hd_cache/datasets/v2v4real/train'
-# validate_dir: '/hd_cache/datasets/v2v4real/validate'
-root_dir: /mimer/NOBACKUP/groups/junjie_storage/datasets/v2v4real/train
-validate_dir: /mimer/NOBACKUP/groups/junjie_storage/datasets/v2v4real/validate
-=======
-name: v2v4real_pointpillar_extend_pointpillar_adaper0
 root_dir: '/hd_cache/datasets/v2v4real/train'
 validate_dir: '/hd_cache/datasets/v2v4real/validate'
+test_dir: '/hd_cache/datasets/v2v4real/validate'
 # data_dir: "/mimer/NOBACKUP/groups/junjie_storage/datasets/DAIR-V2X/cooperative-vehicle-infrastructure"
 # root_dir: "/mimer/NOBACKUP/groups/junjie_storage/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/train.json"
 # validate_dir: "/mimer/NOBACKUP/groups/junjie_storage/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/val.json"
 # test_dir: "/mimer/NOBACKUP/groups/junjie_storage/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/val.json"
->>>>>>> af5c58ebc8420b511b73f1eaa90f9b6f6f81de1a
 
 wild_setting:
   async: false
@@ -304,16 +297,16 @@ model:
       discrete_ratio: 1.6      # 48 --> 76.8
       embed_dims: &embed_dims 128 # 128 for multi-scale; 384 for single scale
       max_num_agent: *max_cav
-      agent_names: &agent_names ["ego", "point_pillar_v"]
+      agent_names: &agent_names ["ego"]
       # agent_names: &agent_names ["ego"]
-      feature_levels: &feature_levels [3, 3]
+      feature_levels: &feature_levels [3]
       lora_rank: 0
       anchor_number: 2
       # adapter parameters
       n_adapters: 0
       adapters: 
         ego: [[64, 128, 256], [128, 128, 128]]
-        point_pillar_v: [[64, 128, 256], [128, 128, 128]]
+        # point_pillar_v: [[64, 128, 256], [128, 128, 128]]
         # second: [[128], [128]]     
 
       # cross first

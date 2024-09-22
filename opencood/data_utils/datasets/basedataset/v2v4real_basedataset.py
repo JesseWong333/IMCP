@@ -17,7 +17,8 @@ from opencood.utils.pcd_utils import downsample_lidar_minimum
 from opencood.utils.transformation_utils import x1_to_x2, dist_two_pose, tfm_to_pose
 from opencood.data_utils.pre_processor import build_preprocessor
 from opencood.data_utils.post_processor import build_postprocessor
-
+from opencood.utils import box_utils
+from PIL import Image, ImageDraw
 
 class V2V4REALBaseDataset(Dataset):
     """
@@ -633,3 +634,38 @@ class V2V4REALBaseDataset(Dataset):
                                       show_vis,
                                       save_path,
                                       dataset=dataset)
+
+    def shape_to_mask(self, rects, shape_type=None):
+        img_shape = [self.params['bev_h'], self.params['bev_w']]
+        mask = np.zeros(img_shape[:2], dtype=np.uint8)
+        mask = Image.fromarray(mask)
+        draw = ImageDraw.Draw(mask)
+
+        for rect in rects:
+            xy = [(point[0], point[1]) for point in rect]
+            draw.polygon(xy=xy, outline=1, fill=1) # xy 为[(x,y),(x.y),(...,...),...]
+        mask = np.array(mask)
+        return mask
+
+    def scale_boxes(self, boxes):
+        # boxes: N, 4, 2
+        # scale_y = 100 / (40*2)
+        # scale_x = 252 / (100.8*2)
+        pc_range = self.params[self.params['method_i']]["preprocess"]['cav_lidar_range']
+        bev_shape = [self.params['bev_h'], self.params['bev_w']]
+
+        scale_y = bev_shape[0] / (pc_range[4] - pc_range[1])
+        scale_x = bev_shape[1] / (pc_range[3] - pc_range[0])
+
+        boxes[:, :, 0] = (boxes[:, :, 0] - pc_range[0])* scale_x
+        boxes[:, :, 1] = (boxes[:, :, 1] - pc_range[1])* scale_y
+   
+        return boxes
+
+    def create_seg_mask(self, object_bbx_center, object_bbx_mask):
+        object_bbx = object_bbx_center[object_bbx_mask==1]
+        objects_2d = box_utils.boxes_to_corners2d(object_bbx, 'hwl')
+        
+        label_objects = self.scale_boxes(objects_2d)
+        seg_mask = self.shape_to_mask(label_objects)
+        return seg_mask

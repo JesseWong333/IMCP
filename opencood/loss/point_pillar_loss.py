@@ -24,6 +24,11 @@ class PointPillarLoss(nn.Module):
         else:
             self.dir = None
 
+        if 'seg_weight' in args:
+            self.seg_weight = args['seg_weight']
+        else:
+            self.seg_weight = 0.005 # default
+
         if 'iou' in args:
             from opencood.pcdet_utils.iou3d_nms.iou3d_nms_utils import aligned_boxes_iou3d_gpu
             self.iou_loss_func = aligned_boxes_iou3d_gpu
@@ -67,7 +72,7 @@ class PointPillarLoss(nn.Module):
         if 'seg_preds' in output_dict:
             seg_preds = output_dict["seg_preds"] # B, 2, H, W
             seg_target = target_dict['object_seg_label'].long() # B, H, W
-            weight_vector = torch.tensor([0.005, 1.0]).cuda()
+            weight_vector = torch.tensor([self.seg_weight, 1.0]).cuda()
             seg_loss = nn.CrossEntropyLoss(weight=weight_vector)(seg_preds, seg_target)
             self.loss_dict.update({'seg_loss': seg_loss.item()})
             return seg_loss

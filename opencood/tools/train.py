@@ -82,7 +82,7 @@ def main():
         optimizer = train_utils.setup_optimizer(hypes, params)
 
     elif hypes['train_agent_ID'] == -3:
-        # -3 finetune lora
+        # -3
         model_dict = torch.load(hypes['model_fusion_path'])
         load_results = model.load_state_dict(model_dict, strict=False)
         print("unexpected_keys:" + str(load_results.unexpected_keys))
