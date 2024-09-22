@@ -51,7 +51,7 @@ class AdapterDouble(nn.Module):
                 conv3x3(output_filter, output_filter, lora_rank),
                 nn.BatchNorm2d(output_filter),
                 nn.ReLU(inplace=True),
-                conv3x3(output_filter, lora_rank),
+                conv3x3(output_filter, output_filter),
                 nn.BatchNorm2d(output_filter),
                 ))
         self.layers = nn.ModuleList(layers)

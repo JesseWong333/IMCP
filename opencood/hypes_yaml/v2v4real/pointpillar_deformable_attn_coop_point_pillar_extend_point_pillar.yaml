@@ -1,4 +1,4 @@
-name: v2v4real_pointpillar_extend_pointpillar_adaper0
+name: v2v4real_pointpillar_extend_pointpillar_adaper_1
 root_dir: '/hd_cache/datasets/v2v4real/train'
 validate_dir: '/hd_cache/datasets/v2v4real/validate'
 # data_dir: "/mimer/NOBACKUP/groups/junjie_storage/datasets/DAIR-V2X/cooperative-vehicle-infrastructure"
@@ -302,7 +302,7 @@ model:
       lora_rank: 0
       anchor_number: 2
       # adapter parameters
-      n_adapters: 0
+      n_adapters: 1
       adapters: 
         ego: [[64, 128, 256], [128, 128, 128]]
         point_pillar_v: [[64, 128, 256], [128, 128, 128]]
