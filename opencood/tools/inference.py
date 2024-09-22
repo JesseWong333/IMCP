@@ -70,7 +70,7 @@ def main():
     #     hypes = parser_func(hypes)
         
     
-    hypes['validate_dir'] = hypes['test_dir']
+    hypes['test_dir'] = hypes['validate_dir']
     if "OPV2V" in hypes['test_dir'] or "v2xsim" in hypes['test_dir']:
         assert "test" in hypes['validate_dir']
     
