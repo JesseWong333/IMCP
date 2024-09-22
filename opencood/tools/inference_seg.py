@@ -78,9 +78,9 @@ def main():
     #         if name == hypes["yaml_parser"]:
     #             parser_func = func
     #     hypes = parser_func(hypes)
-        
+
     
-    hypes['validate_dir'] = hypes['test_dir']
+    # hypes['validate_dir'] = hypes['test_dir']
     if "OPV2V" in hypes['test_dir'] or "v2xsim" in hypes['test_dir']:
         assert "test" in hypes['validate_dir']
     
@@ -149,13 +149,14 @@ def main():
             intersect, union, _ = get_batch_iou(seg_preds, gt_seg)
             total_intersect += intersect
             total_union += union
-            # .cpu().squeeze().numpy().astype(np.uint8) # b, h, w
-            # gt_seg = batch_data[hypes['train_agent_ID']]['label_dict_single']['object_seg_label'].cpu().squeeze().numpy()  # b, h, w
+            
+            seg_preds = seg_preds.cpu().squeeze().numpy().astype(np.uint8) # b, h, w
+            gt_seg = batch_data[hypes['train_agent_ID']]['label_dict_single']['object_seg_label'].cpu().squeeze().numpy()  # b, h, w
 
-            # seg_preds_img = Image.fromarray(seg_preds*255)
-            # gt_preds_img = Image.fromarray(gt_seg*255)
-            # seg_preds_img.save(os.path.join('./tmp/', str(i) + '_pred.png'))
-            # gt_preds_img.save(os.path.join('./tmp/', str(i) + '_gt.png'))
+            seg_preds_img = Image.fromarray(seg_preds*255)
+            gt_preds_img = Image.fromarray(gt_seg*255)
+            seg_preds_img.save(os.path.join('./tmp/', str(i) + '_pred.png'))
+            gt_preds_img.save(os.path.join('./tmp/', str(i) + '_gt.png'))
             
     print("iou:{}".format(total_intersect / total_union))
 

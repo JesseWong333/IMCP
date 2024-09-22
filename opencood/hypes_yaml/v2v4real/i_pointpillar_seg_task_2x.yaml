@@ -1,6 +1,7 @@
-name: v2v4real_pointpillar_extend_pointpillar_adaper0
+name: v2v4real_seg_task_lr_0.0002_weight_0.05
 root_dir: '/hd_cache/datasets/v2v4real/train'
 validate_dir: '/hd_cache/datasets/v2v4real/validate'
+test_dir: '/hd_cache/datasets/v2v4real/test'
 # data_dir: "/mimer/NOBACKUP/groups/junjie_storage/datasets/DAIR-V2X/cooperative-vehicle-infrastructure"
 # root_dir: "/mimer/NOBACKUP/groups/junjie_storage/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/train.json"
 # validate_dir: "/mimer/NOBACKUP/groups/junjie_storage/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/val.json"
@@ -25,21 +26,23 @@ noise_setting:
     pos_mean: 0
     rot_mean: 0
 
-bev_h: &bev_h 48
-bev_w: &bev_w 176
-train_agent_ID: &train_agent_ID -1  # -2为end-end训练， -1固定住encoder，0,1,2为各自的ID； 0是ego, 1是infra
+bev_h: &bev_h 96
+bev_w: &bev_w 352
+train_agent_ID: &train_agent_ID 1  # -2为end-end训练， -1固定住encoder，0,1,2为各自的ID； 0是ego, 1是infra
 
 method_v: &method_v point_pillar
-method_i: &method_i point_pillar_shrink
+method_i: &method_i point_pillar
+
+seg_task: true
 
 # method_v_path: ./opencood/logs/v_point_pillar_2024_08_01_17_43_01/net_epoch_bestval_at13.pth
-method_ego_path: ./opencood/logs/v2v4real_aug_single0_2024_09_04_00_42_40/net_epoch_bestval_at51.pth
-method_i_path: ./opencood/logs/v2v4real_aug_single1_2024_09_04_14_58_53/net_epoch_bestval_at57.pth
+method_ego_path: ./opencood/logs/ego_pointpillar_2024_08_13_13_06_12/net_epoch_bestval_at13.pth
+method_i_path: ./opencood/logs/i_point_pillar_2024_08_01_17_41_50/net_epoch_bestval_at15.pth
 
-yaml_parser: ["load_point_pillar_params", "load_second_params", "load_point_pillar_params_shrink"]
+yaml_parser: ["load_point_pillar_params", "load_second_params"]
 train_params:
   batch_size: &batch_size 4
-  epoches: 20
+  epoches: 60
   eval_freq: 2
   save_freq: 2
   max_cav: &max_cav 2
@@ -55,15 +58,15 @@ fusion:
   args: 
     proj_first: false
 
-# data_augment:
-#   - NAME: random_world_flip
-#     ALONG_AXIS_LIST: [ 'x' ]
+data_augment:
+  - NAME: random_world_flip
+    ALONG_AXIS_LIST: [ 'x' ]
 
-#   - NAME: random_world_rotation
-#     WORLD_ROT_ANGLE: [ -0.78539816, 0.78539816 ]
+  - NAME: random_world_rotation
+    WORLD_ROT_ANGLE: [ -0.78539816, 0.78539816 ]
 
-#   - NAME: random_world_scaling
-#     WORLD_SCALE_RANGE: [ 0.95, 1.05 ]
+  - NAME: random_world_scaling
+    WORLD_SCALE_RANGE: [ 0.95, 1.05 ]
 
 
 # 不同的方法有不同的前处理和后处理
@@ -86,39 +89,6 @@ point_pillar:
     gt_range: [-100, -40, -5, 100, 40, 3]
     anchor_args:
       cav_lidar_range: *point_pillar_cav_lidar
-      l: 3.9
-      w: 1.6
-      h: 1.56
-      r: [0, 90]
-      feature_stride: 4
-      num: 2
-    target_args:
-      pos_threshold: 0.6
-      neg_threshold: 0.45
-      score_threshold: 0.20
-    order: 'hwl' # hwl or lwh
-    max_num: 100 # maximum number of objects in a single frame. use this number to make sure different frames has the same dimension in the same batch
-    nms_thresh: 0.15
-
-point_pillar_shrink:
-  # preprocess-related
-  preprocess:
-    # options: BasePreprocessor, VoxelPreprocessor, BevPreprocessor
-    core_method: 'SpVoxelPreprocessor'
-    args: 
-      voxel_size: [0.4, 0.4, 8]  # 初始大小： 192 * 704 
-      max_points_per_voxel: 32
-      max_voxel_train: 32000
-      max_voxel_test: 70000
-    # lidar range for each individual cav.
-    cav_lidar_range: [-140.8, -38.4, -5, 140.8, 38.4, 3]
-  
-  # anchor box related
-  postprocess:
-    core_method: 'VoxelPostprocessor' # VoxelPostprocessor, BevPostprocessor supported
-    gt_range: [-100, -40, -5, 100, 40, 3]
-    anchor_args:
-      cav_lidar_range: [-140.8, -38.4, -5, 140.8, 38.4, 3]
       l: 3.9
       w: 1.6
       h: 1.56
@@ -186,30 +156,7 @@ model:
     point_pillar:
       voxel_size: *point_pillar_voxel_size
       lidar_range: *point_pillar_cav_lidar
-      anchor_number: 2
-      # embed_dims: &embed_dims 128 
-      multi_scale: true
-      head_embed_dims: 384
-      pillar_vfe:
-        use_norm: true
-        with_distance: false
-        use_absolute_xyz: true
-        num_filters: [64]
-      point_pillar_scatter:
-        num_features: 64
-      base_bev_backbone: # backbone will downsample 2x
-        resnet: true
-        voxel_size: *point_pillar_voxel_size
-        layer_nums: [3, 5, 8]
-        layer_strides: [2, 2, 2]
-        num_filters: [64, 128, 256]
-        upsample_strides: [1, 2, 4]
-        num_upsample_filter: [128, 128, 128]
-    
-
-    point_pillar_shrink:
-      voxel_size: *point_pillar_voxel_size
-      lidar_range: *point_pillar_cav_lidar
+      single_seg_head: true
       anchor_number: 2
       # embed_dims: &embed_dims 128 
       multi_scale: true
@@ -229,13 +176,13 @@ model:
         num_filters: [64, 128, 256]
         upsample_strides: [1, 2, 4]
         num_upsample_filter: [128, 128, 128]
-      shrink_header:  # downsample 2x
+      shrink_header:  
         kernal_size: [3]
-        stride: [2]
+        stride: [1]
         padding: [1]
         dim: [256]
-        input_dim: 384 # 128 * 3 
-
+        input_dim: 384 # 128 * 3
+      
     # Method 2: second
     second:
       lidar_range: *second_cav_lidar
@@ -293,19 +240,18 @@ model:
     defor_encoder_fusion: 
       bev_h: *bev_h
       bev_w: *bev_w
-      discrete_ratio: 1.6      # 48 --> 76.8
       embed_dims: &embed_dims 128 # 128 for multi-scale; 384 for single scale
       max_num_agent: *max_cav
-      agent_names: &agent_names ["ego", "point_pillar_v"]
-      # agent_names: &agent_names ["ego"]
-      feature_levels: &feature_levels [3, 3]
+      # agent_names: &agent_names ["ego", "point_pillar_v"]
+      agent_names: &agent_names ["ego"]
+      feature_levels: &feature_levels [3]
       lora_rank: 0
       anchor_number: 2
       # adapter parameters
-      n_adapters: 0
+      n_adapters: 5
       adapters: 
         ego: [[64, 128, 256], [128, 128, 128]]
-        point_pillar_v: [[64, 128, 256], [128, 128, 128]]
+        # point_pillar_v: [[64, 128, 256], [128, 128, 128]]
         # second: [[128], [128]]     
 
       # cross first
@@ -322,6 +268,7 @@ model:
 loss:
   core_method: point_pillar_loss
   args:
+    seg_weight: 0.05
     pos_cls_weight: 2.0
     cls:
       type: 'SigmoidFocalLoss'
@@ -340,7 +287,7 @@ loss:
 
 optimizer:
   core_method: Adam
-  lr: 0.002
+  lr: 0.0002
   args:
     eps: 1e-10
     weight_decay: 1e-4

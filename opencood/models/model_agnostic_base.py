@@ -66,7 +66,7 @@ class ModelAgnosticBase(nn.Module):
             _, output_dict = self.model_fusion( [feature_v, feature_i], pairwise_t_matrix)
             return output_dict
 
-        if self.train_agent_ID == -1 or -3:
+        if self.train_agent_ID == -1 or self.train_agent_ID == -3:
             # vehicle
             data_dict_v = self.repack_data(data_dict, 0)
             data_dict_i = self.repack_data(data_dict, 1)

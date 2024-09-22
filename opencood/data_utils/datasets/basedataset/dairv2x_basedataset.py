@@ -5,7 +5,6 @@ import h5py
 import torch
 import numpy as np
 from torch.utils.data import Dataset
-from PIL import Image
 import random
 import opencood.utils.pcd_utils as pcd_utils
 from opencood.data_utils.augmentor.data_augmentor import DataAugmentor
