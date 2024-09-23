@@ -250,7 +250,7 @@ class DeforEncoderFusion(nn.Module):
                 ))
         else:
             for i in range(len(input_filters)):
-                adapter_list.append(AdapterDouble(input_filters[i], output_filters[i], n_adapter_layers, lora_rank))
+                adapter_list.append(Adapter(input_filters[i], output_filters[i], n_adapter_layers, lora_rank))
         return nn.ModuleList(adapter_list)
 
     @staticmethod
