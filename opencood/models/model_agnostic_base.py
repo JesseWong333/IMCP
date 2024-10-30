@@ -57,6 +57,16 @@ class ModelAgnosticBase(nn.Module):
     def forward(self, data_dict):
         pairwise_t_matrix = data_dict['ego']['pairwise_t_matrix'] # B, cav_id, cav_id, 4, 4
 
+        if self.train_agent_ID == -4:
+            # vehicle
+            data_dict_v = self.repack_data(data_dict, 0)
+            data_dict_i = self.repack_data(data_dict, 1)
+            with torch.no_grad():
+                feature_v, _ = self.model_v(data_dict_v)
+            feature_i, _ = self.model_i(data_dict_i)
+            _, output_dict = self.model_fusion( [feature_v, feature_i], pairwise_t_matrix)
+            return output_dict
+
         if self.train_agent_ID == -2:
             data_dict_v = self.repack_data(data_dict, 0)
             data_dict_i = self.repack_data(data_dict, 1)
