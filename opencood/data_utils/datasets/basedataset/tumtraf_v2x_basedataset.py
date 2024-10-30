@@ -262,7 +262,24 @@ class TUMTRAFBaseDataset(Dataset):
     def generate_object_center_camera(self, cav_contents, reference_lidar_pose):
         raise NotImplementedError()
 
+    def augment(self, lidar_np, object_bbx_center, object_bbx_mask,
+                flip=None, rotation=None, scale=None):
+        """
+        """
+        tmp_dict = {'lidar_np': lidar_np,
+                    'object_bbx_center': object_bbx_center,
+                    'object_bbx_mask': object_bbx_mask,
+                    'flip': flip,
+                    'noise_rotation': rotation,
+                    'noise_scale': scale}
+        tmp_dict = self.data_augmentor.forward(tmp_dict)
 
+        lidar_np = tmp_dict['lidar_np']
+        object_bbx_center = tmp_dict['object_bbx_center']
+        object_bbx_mask = tmp_dict['object_bbx_mask']
+
+        return lidar_np, object_bbx_center, object_bbx_mask
+    
 if __name__ == "__main__":
     # data/tumtraf_v2x_cooperative_perception_dataset_processed/tumtraf_v2x_nusc_infos_train.pkl
     params = dict()

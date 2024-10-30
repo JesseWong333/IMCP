@@ -109,6 +109,26 @@ def main():
                 else:
                     value.requires_grad = False
         optimizer = train_utils.setup_optimizer(hypes, model)
+        
+    elif hypes['train_agent_ID'] == -4:
+        # back alignment
+        ego_model_dict = torch.load(hypes['method_ego_path'])
+        load_results = model.load_state_dict(ego_model_dict, strict=False)
+        print("load unexpected_keys:" + str(load_results.unexpected_keys))
+
+        extra_agent_name = hypes['model']['args']['defor_encoder_fusion']['agent_names'][1]
+        print("tuning parameters:")
+        for name, value in model.named_parameters():
+            # tune paeameters assiaated with agent_names and model i
+            if extra_agent_name in name or 'model_i' in name:
+                value.requires_grad = True
+                print(name)
+            else:
+                value.requires_grad = False
+        # setup optimizer
+        params = filter(lambda p: p.requires_grad, model.parameters())
+        print("number of parameters tuned: {}".format(sum([c.numel() for c in params])))
+        optimizer = train_utils.setup_optimizer(hypes, params)
 
     # record lowest validation loss checkpoint.
     lowest_val_loss = 1e5
@@ -156,7 +176,7 @@ def main():
         cav_id = hypes['train_agent_ID']
         # the model will be evaluation mode during validation 
         model.train()
-        if cav_id < 0:
+        if cav_id == -1 or cav_id == -3:
             model.eval()  # we call eval(), just to avoid the norm layer update
             extra_agent_name = hypes['model']['args']['defor_encoder_fusion']['agent_names'][1]
             print("module to train:")
