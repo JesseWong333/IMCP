@@ -1,19 +1,25 @@
-name: test_v2v4real_pointpillar_extend_seg_adaper_3
-root_dir: '/hd_cache/datasets/v2v4real/train'
-validate_dir: '/hd_cache/datasets/v2v4real/validate'
-# root_dir: /mimer/NOBACKUP/groups/junjie_storage/datasets/v2v4real/train
-# validate_dir: /mimer/NOBACKUP/groups/junjie_storage/datasets/v2v4real/validate
+name: test_spointpillar_pointpillar_adapter_0
+data_dir: "/hd_cache/datasets/DAIR-V2X/cooperative-vehicle-infrastructure"
+root_dir: "/data/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/train.json"
+validate_dir: "/data/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/val.json"
+test_dir: "/data/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/val.json"
+# data_dir: "/mimer/NOBACKUP/groups/junjie_storage/datasets/DAIR-V2X/cooperative-vehicle-infrastructure"
+# root_dir: "/mimer/NOBACKUP/groups/junjie_storage/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/train.json"
+# validate_dir: "/mimer/NOBACKUP/groups/junjie_storage/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/val.json"
+# test_dir: "/mimer/NOBACKUP/groups/junjie_storage/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/val.json"
 
-wild_setting:
-  async: false
-  async_overhead: 100
-  seed: 20
-  loc_err: false
-  xyz_std: 0.2
-  ryp_std: 0.2
-  data_size: 1.06 # Mb!!
-  transmission_speed: 27 # Mbps!!
-  backbone_delay: 10 # ms
+# 这种情况创建supernet去训练, point_pillar是一种配置， second是一种配置
+load_history: false
+bev_h: &bev_h 100
+bev_w: &bev_w 252
+train_agent_ID: &train_agent_ID -1  # -1为协同训练，0,1,2为各自的ID； 0是ego, 1是infra
+
+method_v: &method_v point_pillar
+method_i: &method_i point_pillar
+
+# method_v_path: ./opencood/logs/v_point_pillar_2024_08_01_17_43_01/net_epoch_bestval_at13.pth
+method_ego_path: ./opencood/logs/ego_pointpillar_2024_08_13_13_06_12/net_epoch_bestval_at13.pth
+method_i_path: ./opencood/logs/i_point_pillar_2024_08_01_17_41_50/net_epoch_bestval_at15.pth
 
 noise_setting:
   add_noise: false
@@ -23,18 +29,7 @@ noise_setting:
     pos_mean: 0
     rot_mean: 0
 
-bev_h: &bev_h 48
-bev_w: &bev_w 176
-train_agent_ID: &train_agent_ID -1  # -2为end-end训练， -1固定住encoder，0,1,2为各自的ID； 0是ego, 1是infra
-
-method_v: &method_v point_pillar
-method_i: &method_i point_pillar_shrink
-
-# method_v_path: ./opencood/logs/v_point_pillar_2024_08_01_17_43_01/net_epoch_bestval_at13.pth
-method_ego_path: ./opencood/logs/v2v4real_aug_single0_2024_09_04_00_42_40/net_epoch_bestval_at51.pth
-method_i_path: ./opencood/logs/v2v4real_seg_task_lr_0.0002_weight_0.05_2024_09_22_16_11_07/net_epoch_bestval_at59.pth
-
-yaml_parser: ["load_point_pillar_params", "load_second_params", "load_point_pillar_params_shrink"]
+yaml_parser: ["load_point_pillar_params", "load_second_params"]
 train_params:
   batch_size: &batch_size 4
   epoches: 20
@@ -49,7 +44,7 @@ comm_range: 1000
 
 fusion:
   core_method: 'agnostic'
-  dataset: 'v2v4real'
+  dataset: 'dairv2x'
   args: 
     proj_first: false
 
@@ -71,24 +66,24 @@ point_pillar:
     # options: BasePreprocessor, VoxelPreprocessor, BevPreprocessor
     core_method: 'SpVoxelPreprocessor'
     args: 
-      voxel_size: &point_pillar_voxel_size [0.4, 0.4, 8]  # 初始大小： 192 * 704 
+      voxel_size: &point_pillar_voxel_size [0.4, 0.4, 5]  # 初始大小： 200 * 504 
       max_points_per_voxel: 32
       max_voxel_train: 32000
       max_voxel_test: 70000
     # lidar range for each individual cav.
-    cav_lidar_range: &point_pillar_cav_lidar [-140.8, -38.4, -5, 140.8, 38.4, 3]
+    cav_lidar_range: &point_pillar_cav_lidar [-100.8, -40, -3.5, 100.8, 40, 1.5]
   
   # anchor box related
   postprocess:
     core_method: 'VoxelPostprocessor' # VoxelPostprocessor, BevPostprocessor supported
-    gt_range: [-100, -40, -5, 100, 40, 3]
+    gt_range: *point_pillar_cav_lidar
     anchor_args:
       cav_lidar_range: *point_pillar_cav_lidar
-      l: 3.9
-      w: 1.6
+      l: 4.5
+      w: 2
       h: 1.56
       r: [0, 90]
-      feature_stride: 4
+      feature_stride: 2
       num: 2
     target_args:
       pos_threshold: 0.6
@@ -97,39 +92,10 @@ point_pillar:
     order: 'hwl' # hwl or lwh
     max_num: 100 # maximum number of objects in a single frame. use this number to make sure different frames has the same dimension in the same batch
     nms_thresh: 0.15
-
-point_pillar_shrink:
-  # preprocess-related
-  preprocess:
-    # options: BasePreprocessor, VoxelPreprocessor, BevPreprocessor
-    core_method: 'SpVoxelPreprocessor'
-    args: 
-      voxel_size: [0.4, 0.4, 8]  # 初始大小： 192 * 704 
-      max_points_per_voxel: 32
-      max_voxel_train: 32000
-      max_voxel_test: 70000
-    # lidar range for each individual cav.
-    cav_lidar_range: [-140.8, -38.4, -5, 140.8, 38.4, 3]
-  
-  # anchor box related
-  postprocess:
-    core_method: 'VoxelPostprocessor' # VoxelPostprocessor, BevPostprocessor supported
-    gt_range: [-100, -40, -5, 100, 40, 3]
-    anchor_args:
-      cav_lidar_range: [-140.8, -38.4, -5, 140.8, 38.4, 3]
-      l: 3.9
-      w: 1.6
-      h: 1.56
-      r: [0, 90]
-      feature_stride: 4
-      num: 2
-    target_args:
-      pos_threshold: 0.6
-      neg_threshold: 0.45
-      score_threshold: 0.20
-    order: 'hwl' # hwl or lwh
-    max_num: 100 # maximum number of objects in a single frame. use this number to make sure different frames has the same dimension in the same batch
-    nms_thresh: 0.15
+    # dir_args: &dir_args
+    #   dir_offset: 0.7853
+    #   num_bins: 2
+    #   anchor_yaw: *point_pillar_anchor_yaw
 
 second:
   # preprocess-related
@@ -142,15 +108,15 @@ second:
       max_voxel_train: 32000
       max_voxel_test: 70000
     # lidar range for each individual cav. Format: xyzxyz minmax
-    cav_lidar_range: &second_cav_lidar [-140.8, -38.4, -5, 140.8, 38.4, 3]
+    cav_lidar_range: &second_cav_lidar [-100.8, -40, -3.5, 100.8, 40, 1.5]
   
   postprocess:
     core_method: 'VoxelPostprocessor' # VoxelPostprocessor, BevPostprocessor supported
     gt_range: *second_cav_lidar
     anchor_args:
       cav_lidar_range: *second_cav_lidar
-      l: 3.9
-      w: 1.6
+      l: 4.5
+      w: 2
       h: 1.56
       r: [0, 90]
       feature_stride: 8
@@ -203,37 +169,7 @@ model:
         num_filters: [64, 128, 256]
         upsample_strides: [1, 2, 4]
         num_upsample_filter: [128, 128, 128]
-    
-
-    point_pillar_shrink:
-      voxel_size: *point_pillar_voxel_size
-      lidar_range: *point_pillar_cav_lidar
-      anchor_number: 2
-      # embed_dims: &embed_dims 128 
-      multi_scale: true
-      head_embed_dims: 256
-      pillar_vfe:
-        use_norm: true
-        with_distance: false
-        use_absolute_xyz: true
-        num_filters: [64]
-      point_pillar_scatter:
-        num_features: 64
-      base_bev_backbone: # backbone will downsample 2x
-        resnet: true
-        voxel_size: *point_pillar_voxel_size
-        layer_nums: [3, 5, 8]
-        layer_strides: [2, 2, 2]
-        num_filters: [64, 128, 256]
-        upsample_strides: [1, 2, 4]
-        num_upsample_filter: [128, 128, 128]
-      shrink_header:  # downsample 2x
-        kernal_size: [3]
-        stride: [1]
-        padding: [1]
-        dim: [256]
-        input_dim: 384 # 128 * 3 
-
+      
     # Method 2: second
     second:
       lidar_range: *second_cav_lidar
@@ -291,28 +227,27 @@ model:
     defor_encoder_fusion: 
       bev_h: *bev_h
       bev_w: *bev_w
-      discrete_ratio: 1.6      # 48 --> 76.8
+      discrete_ratio: 0.8
       embed_dims: &embed_dims 128 # 128 for multi-scale; 384 for single scale
       max_num_agent: *max_cav
       agent_names: &agent_names ["ego", "point_pillar_v"]
-      # agent_names: &agent_names ["ego"]
       feature_levels: &feature_levels [3, 3]
       lora_rank: 0
       anchor_number: 2
       # adapter parameters
-      n_adapters: 3
+      n_adapters: 0
       adapters: 
         ego: [[64, 128, 256], [128, 128, 128]]
         point_pillar_v: [[64, 128, 256], [128, 128, 128]]
         # second: [[128], [128]]     
 
       # cross first
-      block_cfgs: [[*embed_dims, 8, 8, 8, 8, 0.1, *agent_names, *feature_levels, 0, 0, ["cross_attn", "norm", "ffn", "norm"]],
-                  [*embed_dims, 8, 8, 8, 8, 0.1, *agent_names, *feature_levels, 0, 0, ["cross_attn", "norm", "ffn", "norm"]],
-                  [*embed_dims, 8, 8, 8, 8, 0.1, *agent_names, *feature_levels, 0, 0, ["cross_attn", "norm", "ffn", "norm"]],
-                  [*embed_dims, 8, 8, 8, 8, 0.1, *agent_names, *feature_levels, 0, 0, ["cross_attn", "norm", "ffn", "norm"]],
-                  [*embed_dims, 8, 8, 8, 8, 0.1, *agent_names, *feature_levels, 0, 0, ["self_attn", "norm", "ffn", "norm"]],
-                  [*embed_dims, 8, 8, 8, 8, 0.1, *agent_names, *feature_levels, 0, 0, ["self_attn", "norm", "ffn", "norm"]]]
+      block_cfgs: [[*embed_dims, 8, 8, 8, 8, 0.1, *agent_names, *feature_levels, 128, 128, ["cross_attn", "norm", "ffn", "norm"]],
+                  [*embed_dims, 8, 8, 8, 8, 0.1, *agent_names, *feature_levels, 128, 128, ["cross_attn", "norm", "ffn", "norm"]],
+                  [*embed_dims, 8, 8, 8, 8, 0.1, *agent_names, *feature_levels, 128, 128, ["cross_attn", "norm", "ffn", "norm"]],
+                  [*embed_dims, 8, 8, 8, 8, 0.1, *agent_names, *feature_levels, 128, 128, ["cross_attn", "norm", "ffn", "norm"]],
+                  [*embed_dims, 8, 8, 8, 8, 0.1, *agent_names, *feature_levels, 128, 128, ["self_attn", "norm", "ffn", "norm"]],
+                  [*embed_dims, 8, 8, 8, 8, 0.1, *agent_names, *feature_levels, 128, 128, ["self_attn", "norm", "ffn", "norm"]]]
   
       head_embed_dims: *embed_dims
     # # dir_args: *dir_args

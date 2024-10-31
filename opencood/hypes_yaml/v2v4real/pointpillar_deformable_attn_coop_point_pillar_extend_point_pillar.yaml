@@ -1,8 +1,8 @@
-name: v2v4real_pointpillar_extend_pointpillar_adaper_7
-# root_dir: '/hd_cache/datasets/v2v4real/train'
-# validate_dir: '/hd_cache/datasets/v2v4real/validate'
-root_dir: /mimer/NOBACKUP/groups/junjie_storage/datasets/v2v4real/train
-validate_dir: /mimer/NOBACKUP/groups/junjie_storage/datasets/v2v4real/validate
+name: test_v2v4real_pointpillar_extend_pointpillar_adaper_2
+root_dir: '/hd_cache/datasets/v2v4real/train'
+validate_dir: '/hd_cache/datasets/v2v4real/validate'
+# root_dir: /mimer/NOBACKUP/groups/junjie_storage/datasets/v2v4real/train
+# validate_dir: /mimer/NOBACKUP/groups/junjie_storage/datasets/v2v4real/validate
 
 wild_setting:
   async: false
@@ -300,7 +300,7 @@ model:
       lora_rank: 0
       anchor_number: 2
       # adapter parameters
-      n_adapters: 7
+      n_adapters: 2
       adapters: 
         ego: [[64, 128, 256], [128, 128, 128]]
         point_pillar_v: [[64, 128, 256], [128, 128, 128]]
