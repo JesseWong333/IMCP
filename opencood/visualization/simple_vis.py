@@ -56,7 +56,7 @@ def visualize(infer_result, pcd, pc_range, save_path, method='3d', left_hand=Fal
 
         if pred_box_tensor is not None:
             pred_box_np = pred_box_tensor.cpu().numpy()
-            pred_name = ['pred'] * pred_box_np.shape[0]
+            pred_name = [''] * pred_box_np.shape[0]
 
             score = infer_result.get("score_tensor", None)
             if score is not None:
@@ -93,7 +93,7 @@ def visualize(infer_result, pcd, pc_range, save_path, method='3d', left_hand=Fal
 
         if gt_box_tensor is not None:
             gt_box_np = gt_box_tensor.cpu().numpy()
-            gt_name = ['gt'] * gt_box_np.shape[0]
+            gt_name = [''] * gt_box_np.shape[0]
 
         if method == 'bev':
             canvas = canvas_bev.Canvas_BEV_heading_right(canvas_shape=((pc_range[4]-pc_range[1])*10, (pc_range[3]-pc_range[0])*10),
@@ -101,8 +101,9 @@ def visualize(infer_result, pcd, pc_range, save_path, method='3d', left_hand=Fal
                                             canvas_y_range=(pc_range[1], pc_range[4]),
                                             left_hand=left_hand) 
 
+            canvas.canvas = np.ones_like(canvas.canvas) * 255 # white_bg
             canvas_xy, valid_mask = canvas.get_canvas_coords(pcd_np) # Get Canvas Coords
-            canvas.draw_canvas_points(canvas_xy[valid_mask]) # Only draw valid points
+            canvas.draw_canvas_points(canvas_xy[valid_mask], colors=(129, 129, 129)) # Only draw valid points
             if gt_box_tensor is not None:
                 canvas.draw_boxes(gt_box_np,colors=(0,255,0), texts=gt_name)
             if pred_box_tensor is not None:

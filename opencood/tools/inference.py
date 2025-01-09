@@ -25,7 +25,7 @@ def test_parser():
     parser.add_argument('--fusion_method', type=str,
                         default='intermediate',
                         help='no, no_w_uncertainty, late, early or intermediate')
-    parser.add_argument('--save_vis_interval', type=int, default=40,
+    parser.add_argument('--save_vis_interval', type=int, default=1,
                         help='interval of saving visualization')
     parser.add_argument('--save_npy', action='store_true',
                         help='whether to save prediction and gt result'
@@ -122,7 +122,6 @@ def main():
     
     infer_info = opt.fusion_method + opt.note
 
-
     for i, batch_data in enumerate(data_loader):
         print(f"{infer_info}_{i}")
         if batch_data is None:
@@ -203,7 +202,7 @@ def main():
                                      "lidar_agent_record": lidar_agent_record})
 
             # if (i % opt.save_vis_interval == 0) and (pred_box_tensor is not None):
-            # if (i % opt.save_vis_interval == 0):
+            # # if (i % opt.save_vis_interval == 0):
             #     vis_save_path_root = os.path.join(opt.model_dir, f'vis_{infer_info}')
             #     if not os.path.exists(vis_save_path_root):
             #         os.makedirs(vis_save_path_root)
