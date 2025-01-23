@@ -294,11 +294,27 @@ class DeforEncoderFusion(nn.Module):
         for i, (agent_name, adapter) in enumerate(self.adapters.items()):
             for j, module in enumerate(adapter):
                 mlvl_feats_out[i].append(module(mlvl_feats[i][j]))
-
+        
         #
         agent_lvl_embeds = []
         for key, embeds in self.agent_lvl_embeds.items():
             agent_lvl_embeds.append(embeds)
+
+        # feature save, 要看激活
+        import uuid
+        import os
+        import pickle
+        filename = uuid.uuid4().hex
+        with open(os.path.join('./tmp/','p_p_seg' + filename + '.pkl'), 'wb') as f:
+            before = [[],[]]
+            after = [[], []]
+            for i, (agent_name, adapter) in enumerate(self.adapters.items()):
+                for j, module in enumerate(adapter):
+                    before[i].append( mlvl_feats[i][j].cpu().numpy() )
+                    after[i].append( mlvl_feats_out[i][j].cpu().numpy() )
+ 
+            pickle.dump({"before": before, "after": after}, f)
+
 
         out = []
         batch_size = mlvl_feats_out[0][0].shape[0]
