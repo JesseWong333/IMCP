@@ -179,10 +179,10 @@ def main():
         if cav_id == -1 or cav_id == -3:
             model.eval()  # we call eval(), just to avoid the norm layer update
             extra_agent_name = hypes['model']['args']['defor_encoder_fusion']['agent_names'][1]
-            print("module to train:")
+            # print("module to train:")
             for name, module in model.named_modules():
                 if extra_agent_name in name:
-                    print(name)
+                    # print(name)
                     module.train()
 
         for i, batch_data in enumerate(train_loader):

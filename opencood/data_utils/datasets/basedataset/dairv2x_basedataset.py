@@ -75,6 +75,8 @@ class DAIRV2XBaseDataset(Dataset):
         self.root_dir = params['data_dir']
 
         self.split_info = read_json(split_dir)
+        # random.shuffle(self.split_info)   # 使用80%数据，训练时打开，测试关闭
+        # self.split_info = self.split_info[:int(len(self.split_info)*0.8)]
         co_datainfo = read_json(os.path.join(self.root_dir, 'cooperative/data_info.json'))
         self.co_data = OrderedDict()
         for frame_info in co_datainfo:
