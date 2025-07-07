@@ -70,6 +70,7 @@ This project is impossible without the code of [OpenCOOD](https://github.com/Der
 ## Citation
 ```bibtex
 @INPROCEEDINGS{wang2025modelagnostic,
+  title={Towards Model-Agnostic Cooperative Perception}
   author={Wang, Junjie and Nordstr{\"o}m, Tomas},
   booktitle={International Joint Conference on Neural Networks (IJCNN)}, 
   year={2025},
