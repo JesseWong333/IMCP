@@ -66,3 +66,12 @@ python opencood/tools/inference.py  --model_dir ./opencood/logs/your_log_path, -
 ## Acknowlege
 
 This project is impossible without the code of [OpenCOOD](https://github.com/DerrickXuNu/OpenCOOD), [CoAlign](https://github.com/yifanlu0227/CoAlign), [Deformable DETR](https://github.com/fundamentalvision/Deformable-DETR).
+
+## Citation
+@INPROCEEDINGS{wang2025modelagnostic,
+  author={Wang, Junjie and Nordstr{\"o}m, Tomas},
+  booktitle={International Joint Conference on Neural Networks (IJCNN)}, 
+  year={2025},
+  organization={IEEE}
+}
+
