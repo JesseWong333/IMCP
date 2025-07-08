@@ -1,4 +1,4 @@
-# Towards Model-Agnostic Cooperative Perception
+# Towards Model-Agnostic Cooperative Perception (IJCNN2025)
 
 Abstract: We introduce IMCP, a robust Intermediate Model-Agnostic Cooperative Perception framework.
 IMCP enables universal agent fusion without the need for joint training or model sharing. 
