@@ -26,6 +26,68 @@ import loralib as lora
 from mmdet.models.utils import LearnedPositionalEncoding
 from torch.nn.init import normal_
 
+
+def get_quantization_scale_and_zero_point(fp_tensor, bitwidth):
+    """
+    get quantization scale for single tensor
+    :param fp_tensor: [torch.(cuda.)Tensor] floating tensor to be quantized
+    :param bitwidth: [int] quantization bit width
+    :return:
+        [float] scale
+        [int] zero_point
+    """
+    quantized_min, quantized_max = get_quantized_range(bitwidth)
+    fp_max = fp_tensor.max().item()
+    fp_min = fp_tensor.min().item()
+
+    scale = (fp_max - fp_min) / (quantized_max - quantized_min)
+    zero_point = round(quantized_min - fp_min/scale)
+
+    # clip the zero_point to fall in [quantized_min, quantized_max]
+    if zero_point < quantized_min:
+        zero_point = quantized_min
+    elif zero_point > quantized_max:
+        zero_point = quantized_max
+    else: # convert from float to int using round()
+        zero_point = round(zero_point)
+    return scale, int(zero_point)
+
+def get_quantized_range(bitwidth):
+    quantized_max = (1 << (bitwidth - 1)) - 1
+    quantized_min = -(1 << (bitwidth - 1))
+    return quantized_min, quantized_max
+
+class RoundWithGradient(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x):
+        return torch.round(x)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        return grad_output  # STE: 梯度直接透传
+
+def linear_quantize(fp_tensor, bitwidth, scale, zero_point, dtype=torch.int8) -> torch.Tensor:
+    
+    assert(fp_tensor.dtype == torch.float)
+    assert(isinstance(scale, float) or
+        (scale.dtype == torch.float and scale.dim() == fp_tensor.dim()))
+    assert(isinstance(zero_point, int) or
+        (zero_point.dtype == dtype and zero_point.dim() == fp_tensor.dim()))
+
+    # Step 1: scale the fp_tensor
+    scaled_tensor = fp_tensor / scale
+    # Step 2: round the floating value to integer value
+    rounded_tensor = RoundWithGradient.apply(scaled_tensor)
+
+    # rounded_tensor = rounded_tensor.to(dtype)
+    # Step 3: shift the rounded_tensor to make zero_point 0
+    shifted_tensor = rounded_tensor + zero_point
+
+    # Step 4: clamp the shifted_tensor to lie in bitwidth-bit range
+    quantized_min, quantized_max = get_quantized_range(bitwidth)
+    quantized_tensor = shifted_tensor.clamp_(quantized_min, quantized_max)
+    return quantized_tensor
+
 def conv3x3(in_planes, out_planes, lora_rank=0, stride=1):
     "3x3 convolution with padding"
     return lora.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
@@ -278,6 +340,13 @@ class DeforEncoderFusion(nn.Module):
         pairwise_t_matrix[...,1,2] = pairwise_t_matrix[...,1,2] / (self.discrete_ratio * self.bev_h) * 2
         return pairwise_t_matrix
     
+    @staticmethod
+    def quantize_feature_maps(fp_tensor, bitwidth=2):
+        scale, zero_point = get_quantization_scale_and_zero_point(fp_tensor, bitwidth)
+        quantized_tensor = linear_quantize(fp_tensor, bitwidth, scale, zero_point)
+        quantized_tensor = (quantized_tensor - zero_point) * scale
+        return quantized_tensor
+    
     def forward(self, mlvl_feats, pairwise_t_matrix):
         # pairwise_t_matrix: # B, cav_id, cav_id, 4, 4
 
@@ -285,6 +354,12 @@ class DeforEncoderFusion(nn.Module):
         # mlvl_feats: [ [(B, C, H1, W1), (B, C, H2, W2), (B, C, H3, W3)], 
         #               [(B, C, H1, W1), (B, C, H2, W2)], 
         #                ]
+        
+        # non-ego feature quantization
+        # self.quantize_feature_maps
+        quantized_features = [ self.quantize_feature_maps(non_ego_feature, bitwidth=1) for non_ego_feature in mlvl_feats[1]]
+        mlvl_feats[1] = quantized_features
+        
         pairwise_t_matrix = self.get_normalized_transformation(pairwise_t_matrix)
 
         assert len(self.adapters) == len(mlvl_feats)

@@ -3,9 +3,51 @@
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+from collections import OrderedDict
 
 from opencood.models.sub_modules.base_single_module import PointPillar, Second, DeforEncoderFusion
 from opencood.models.lift_splat_shoot import LiftSplatShoot
+
+import loralib as lora
+
+def conv3x3(in_planes, out_planes, lora_rank=0, stride=1):
+    "3x3 convolution with padding"
+    return lora.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
+                     padding=1, bias=False, r=lora_rank)
+
+def conv1x1(in_planes, out_planes, lora_rank=0, stride=1):
+    "1x1 convolution with padding"
+    return lora.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride,
+                     padding=0, bias=False, r=lora_rank)
+    
+class Adapter(nn.Module):
+    def __init__(self, input_filter, output_filter, n_layers=3, lora_rank=0):
+        super().__init__()
+        
+        layers = []
+        for _ in range(n_layers):
+            layers.append(nn.Sequential(
+                conv3x3(input_filter, input_filter, lora_rank),
+                nn.BatchNorm2d(input_filter),
+                ))
+        self.layers = nn.ModuleList(layers)
+        
+        self.conv0 = nn.Sequential(
+                lora.Conv2d(input_filter, output_filter, kernel_size=1, r=lora_rank),
+                nn.BatchNorm2d(output_filter),
+                # nn.ReLU(inplace=True)
+            )
+
+    def forward(self, x):      
+        residual = x
+        for layer in self.layers:
+            x = layer(x)
+            x += residual
+            x = F.relu(x)
+            residual = x
+        x = self.conv0(x)
+        return x
     
 class ModelAgnosticBase(nn.Module):
     def __init__(self, args):
@@ -28,7 +70,19 @@ class ModelAgnosticBase(nn.Module):
             print("Please configure more agents!")
         
         self.train_agent_ID = args['train_agent_ID']
+        
+        n_downsample_layers =  args['n_downsample'] if 'n_downsample' in args else 0
+        downsample_dict = OrderedDict()
+        for name, in_out_channels in args['downsampler'].items():
+            downsample_dict[name] = self.create_adapter(in_out_channels[0], in_out_channels[1], n_downsample_layers, 0)
+        self.downsample_layers = nn.ModuleDict(downsample_dict)
 
+    def create_adapter(self, input_filters, output_filters, n_adapter_layers, lora_rank):
+        adapter_list = []
+        for i in range(len(input_filters)):
+            adapter_list.append(Adapter(input_filters[i], output_filters[i], n_adapter_layers, lora_rank))
+        return nn.ModuleList(adapter_list)
+    
     def build_model(self, method, args):
         if 'point_pillar' in method:
             return PointPillar(args[method])  
@@ -83,8 +137,19 @@ class ModelAgnosticBase(nn.Module):
 
             with torch.no_grad():
                 feature_v, _ = self.model_v(data_dict_v)
-                feature_i, _ = self.model_i(data_dict_i)
-                
+                feature_i, output_dict = self.model_i(data_dict_i)
+            
+                # sparsify non-ego agents
+                prob = output_dict['cls_preds'].permute(0, 2, 3, 1).softmax(dim=-1)[..., 1]
+                scale_factors =  [f.shape[-1] / prob.shape[-1] for f in feature_i]
+                scales_masks = [F.interpolate(prob.unsqueeze(1), scale_factor=s, mode='nearest') > 0.5 for s in scale_factors]
+            
+            # downsample
+            for agent_name, downsamplers in self.downsample_layers.items():
+                feature_i =  [ downsampler(f) for f, downsampler in zip(feature_i, downsamplers)]
+            
+            feature_i = [f * mask for f, mask in zip(feature_i, scales_masks)]
+            
             # fusion module
             _, output_dict = self.model_fusion( [feature_v, feature_i], pairwise_t_matrix)
             return output_dict
