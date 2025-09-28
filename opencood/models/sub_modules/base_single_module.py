@@ -357,7 +357,7 @@ class DeforEncoderFusion(nn.Module):
         
         # non-ego feature quantization
         # self.quantize_feature_maps
-        quantized_features = [ self.quantize_feature_maps(non_ego_feature, bitwidth=1) for non_ego_feature in mlvl_feats[1]]
+        quantized_features = [ self.quantize_feature_maps(non_ego_feature, bitwidth=2) for non_ego_feature in mlvl_feats[1]]
         mlvl_feats[1] = quantized_features
         
         pairwise_t_matrix = self.get_normalized_transformation(pairwise_t_matrix)

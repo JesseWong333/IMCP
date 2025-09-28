@@ -1,4 +1,4 @@
-name: dairv2x_pointpillar_pointpillar_quantize_1_adapter_6_sparse_downsample_6_c_4
+name: dairv2x_pointpillar_pointpillar_quantize_2_adapter_6_sparse_downsample_6_c_1
 data_dir: "/hd_cache/datasets/DAIR-V2X/cooperative-vehicle-infrastructure"
 root_dir: "/data/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/train.json"
 validate_dir: "/data/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/val.json"
@@ -200,7 +200,7 @@ model:
     # downsample
     n_downsample: 6
     downsampler: 
-        point_pillar_v: [[64, 128, 256], [4, 4, 4]]
+        point_pillar_v: [[64, 128, 256], [1, 1, 1]]
 
     # Fusion method
     # defor_encoder_fusion: 
@@ -243,7 +243,7 @@ model:
       n_adapters: 6
       adapters: 
         ego: [[64, 128, 256], [128, 128, 128]]
-        point_pillar_v: [[4, 4, 4], [128, 128, 128]]
+        point_pillar_v: [[1, 1, 1], [128, 128, 128]]
         # second: [[128], [128]]     
 
       # cross first
