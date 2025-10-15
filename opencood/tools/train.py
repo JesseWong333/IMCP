@@ -6,8 +6,10 @@ import argparse
 import os
 import statistics
 
+import random
 import torch
 from torch.utils.data import DataLoader, Subset
+from opencood.models.sub_modules.dynamic_layers import DynamicConv2d
 from tensorboardX import SummaryWriter
 
 import opencood.hypes_yaml.yaml_utils as yaml_utils
@@ -28,7 +30,18 @@ def train_parser():
     opt = parser.parse_args()
     return opt
 
+def set_dynamic_conv_channel(model, dynamic_conv_channel):
+    
+    for name, module in model.named_modules():
+        if isinstance(module, DynamicConv2d) and 'downsample_layers' in name:
+            module.active_out_channel = dynamic_conv_channel
+            # print("set dynamic conv channel to %d" % module.active_out_channel)
 
+def set_dynamic_bitwidth(model, bitwidth):
+    for name, module in model.named_modules():
+        if hasattr(module, 'quantize_bit'):
+            module.quantize_bit = bitwidth
+            print("set quantization bitwidth to %d" % module.quantize_bit)          
 def main():
     opt = train_parser()
     hypes = yaml_utils.load_yaml(opt.hypes_yaml, opt)
@@ -47,6 +60,7 @@ def main():
                               pin_memory=True,
                               drop_last=True,
                               prefetch_factor=2)
+    
     val_loader = DataLoader(opencood_validate_dataset,
                             batch_size=hypes['train_params']['batch_size'],
                             num_workers=4,
@@ -185,10 +199,17 @@ def main():
                     # print(name)
                     module.train()
 
+        # randomly set dynamic conv channel
+        # if epoch % 10 == 0:
+        # set_dynamic_conv_channel(model, hypes['model']['args']['dynamic_conv_channel'][epoch//10])
+                
         for i, batch_data in enumerate(train_loader):
             if batch_data is None or batch_data['ego']['object_bbx_mask'].sum()==0:
                 continue
-
+            
+            # set_dynamic_conv_channel(model, random.choice(hypes['model']['args']['dynamic_conv_channel']))
+            # set_dynamic_bitwidth(model, random.choice([2, 4, 8]))
+            
             model.zero_grad()
             optimizer.zero_grad()
             batch_data = train_utils.to_device(batch_data, device)

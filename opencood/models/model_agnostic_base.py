@@ -6,6 +6,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from collections import OrderedDict
 
+from opencood.models.sub_modules.dynamic_layers import DynamicConv2d, DynamicBatchNorm2d
+
 from opencood.models.sub_modules.base_single_module import PointPillar, Second, DeforEncoderFusion
 from opencood.models.lift_splat_shoot import LiftSplatShoot
 
@@ -34,8 +36,9 @@ class Adapter(nn.Module):
         self.layers = nn.ModuleList(layers)
         
         self.conv0 = nn.Sequential(
-                lora.Conv2d(input_filter, output_filter, kernel_size=1, r=lora_rank),
-                nn.BatchNorm2d(output_filter),
+                # lora.Conv2d(input_filter, output_filter, kernel_size=1, r=lora_rank),
+                DynamicConv2d(input_filter, output_filter, kernel_size=1),
+                DynamicBatchNorm2d(output_filter),
                 # nn.ReLU(inplace=True)
             )
 
@@ -142,13 +145,14 @@ class ModelAgnosticBase(nn.Module):
                 # sparsify non-ego agents
                 prob = output_dict['cls_preds'].permute(0, 2, 3, 1).softmax(dim=-1)[..., 1]
                 scale_factors =  [f.shape[-1] / prob.shape[-1] for f in feature_i]
-                scales_masks = [F.interpolate(prob.unsqueeze(1), scale_factor=s, mode='nearest') > 0.5 for s in scale_factors]
+                scales_masks = [F.interpolate(prob.unsqueeze(1), scale_factor=s, mode='nearest') > 0.8 for s in scale_factors]
             
             # downsample
             for agent_name, downsamplers in self.downsample_layers.items():
                 feature_i =  [ downsampler(f) for f, downsampler in zip(feature_i, downsamplers)]
             
-            feature_i = [f * mask for f, mask in zip(feature_i, scales_masks)]
+            # feature_i = [f * mask for f, mask in zip(feature_i, scales_masks)]
+            # feature_i = [f.masked_fill(~mask, 1e-6) for f, mask in zip(feature_i, scales_masks)]
             
             # fusion module
             _, output_dict = self.model_fusion( [feature_v, feature_i], pairwise_t_matrix)

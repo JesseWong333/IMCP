@@ -7,6 +7,8 @@ import torch.nn.functional as F
 import numpy as np
 from collections import OrderedDict
 
+from opencood.models.sub_modules.dynamic_layers import DynamicConv2d, DynamicBatchNorm2d
+
 from opencood.models.sub_modules.pillar_vfe import PillarVFE
 from opencood.models.sub_modules.point_pillar_scatter import PointPillarScatter
 from opencood.models.sub_modules.base_bev_backbone import BaseBEVBackbone
@@ -98,44 +100,16 @@ def conv1x1(in_planes, out_planes, lora_rank=0, stride=1):
     return lora.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride,
                      padding=0, bias=False, r=lora_rank)
 
-class AdapterDouble(nn.Module):
-    def __init__(self, input_filter, output_filter, n_layers=3, lora_rank=0):
-        super().__init__()
-        # 针对每一个特征级别
-        self.conv0 = nn.Sequential(
-                lora.Conv2d(input_filter, output_filter, kernel_size=1, r=lora_rank),
-                nn.BatchNorm2d(output_filter)
-            )
-        
-        layers = []
-        for _ in range(n_layers):
-            layers.append(nn.Sequential(
-                conv3x3(output_filter, output_filter, lora_rank),
-                nn.BatchNorm2d(output_filter),
-                nn.ReLU(inplace=True),
-                conv3x3(output_filter, output_filter),
-                nn.BatchNorm2d(output_filter),
-                ))
-        self.layers = nn.ModuleList(layers)
 
-    def forward(self, x):
-        x = self.conv0(x)
-        residual = x
-        for layer in self.layers:
-            x = layer(x)
-            # F(x)+x
-            x += residual
-            x = F.relu(x)
-            residual = x
-        return x
-    
 class Adapter(nn.Module):
     def __init__(self, input_filter, output_filter, n_layers=3, lora_rank=0):
         super().__init__()
         # 针对每一个特征级别
         self.conv0 = nn.Sequential(
-                lora.Conv2d(input_filter, output_filter, kernel_size=1, r=lora_rank),
-                nn.BatchNorm2d(output_filter),
+                # lora.Conv2d(input_filter, output_filter, kernel_size=1, r=lora_rank),
+                # nn.BatchNorm2d(output_filter),
+                DynamicConv2d(input_filter, output_filter, kernel_size=1),
+                DynamicBatchNorm2d(output_filter),
                 nn.ReLU(inplace=True)
             )
         
@@ -292,6 +266,8 @@ class DeforEncoderFusion(nn.Module):
                                   kernel_size=1, r = 0)
         self.reg_head = lora.Conv2d(model_cfg['head_embed_dims'], 7 * model_cfg['anchor_number'],
                                   kernel_size=1, r = 0)
+        
+        self.quantize_bit = model_cfg['quantize_bit']
 
     # def create_adapter(self, input_filters, output_filters):
     #     adapter_list = []
@@ -347,6 +323,10 @@ class DeforEncoderFusion(nn.Module):
         quantized_tensor = (quantized_tensor - zero_point) * scale
         return quantized_tensor
     
+    @staticmethod
+    def quantize_feature_maps_FSQ(fp_tensor, bitwidth=2):
+        return RoundWithGradient.apply((2 ** bitwidth - 1) * torch.sigmoid(fp_tensor))
+    
     def forward(self, mlvl_feats, pairwise_t_matrix):
         # pairwise_t_matrix: # B, cav_id, cav_id, 4, 4
 
@@ -357,7 +337,7 @@ class DeforEncoderFusion(nn.Module):
         
         # non-ego feature quantization
         # self.quantize_feature_maps
-        quantized_features = [ self.quantize_feature_maps(non_ego_feature, bitwidth=2) for non_ego_feature in mlvl_feats[1]]
+        quantized_features = [self.quantize_feature_maps_FSQ(non_ego_feature, bitwidth=self.quantize_bit) for non_ego_feature in mlvl_feats[1]]
         mlvl_feats[1] = quantized_features
         
         pairwise_t_matrix = self.get_normalized_transformation(pairwise_t_matrix)
