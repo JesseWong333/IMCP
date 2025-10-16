@@ -1,4 +1,4 @@
-name: dairv2x_pointpillar_pointpillar_quantize_2_adapter_6_sparse_downsample_6_c_1
+name: dairv2x_pointpillar_pointpillar_quantize_2_adapter_6_downsample_6_c_1
 data_dir: "/hd_cache/datasets/DAIR-V2X/cooperative-vehicle-infrastructure"
 root_dir: "/data/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/train.json"
 validate_dir: "/data/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/val.json"

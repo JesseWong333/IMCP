@@ -1,4 +1,4 @@
-name: pointpillar_lss_lora_0_0_adapter_3
+name: pointpillar_lss_lora_0_0_seg_quantize_1_adapter_6_downsample_6_c_1
 data_dir: "/hd_cache/datasets/DAIR-V2X/cooperative-vehicle-infrastructure"
 root_dir: "/data/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/train.json"
 validate_dir: "/data/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/val.json"
@@ -61,15 +61,15 @@ fusion:
   args: 
     proj_first: false
 
-data_augment:
-  - NAME: random_world_flip
-    ALONG_AXIS_LIST: [ 'x' ]
+# data_augment:
+#   - NAME: random_world_flip
+#     ALONG_AXIS_LIST: [ 'x' ]
 
-  - NAME: random_world_rotation
-    WORLD_ROT_ANGLE: [ -0.78539816, 0.78539816 ]
+#   - NAME: random_world_rotation
+#     WORLD_ROT_ANGLE: [ -0.78539816, 0.78539816 ]
 
-  - NAME: random_world_scaling
-    WORLD_SCALE_RANGE: [ 0.95, 1.05 ]
+#   - NAME: random_world_scaling
+#     WORLD_SCALE_RANGE: [ 0.95, 1.05 ]
 
 
 # 不同的方法有不同的前处理和后处理
@@ -271,6 +271,11 @@ model:
         input_dim: 128
       camera_encoder: EfficientNet
 
+    dynamic_conv_channel: [8, 4, 2, 1]
+    n_downsample: 6
+    downsampler: 
+        lss_v: [[128], [1]]
+
     # Fusion method
     defor_encoder_fusion: 
       bev_h: *bev_h
@@ -284,12 +289,13 @@ model:
 
       anchor_number: 2
       # adapter parameters
-      n_adapters: 3
+      quantize_bit: 1
+      n_adapters: 6
       adapters: 
         ego: [[64, 128, 256], [128, 128, 128]]
         # point_pillar: [[64, 128, 256], [128, 128, 128]]
         # second: [[384], [128]]
-        lss_v: [[128], [128]]   
+        lss_v: [[1], [128]]   
 
       # cross first
       block_cfgs: [[*embed_dims, 8, 8, 8, 8, 0.1, *agent_names, *feature_levels, 32, 64, ["cross_attn", "norm", "ffn", "norm"]],
