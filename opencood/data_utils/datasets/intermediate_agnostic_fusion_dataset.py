@@ -302,6 +302,8 @@ def getAgnosticFusionDataset(cls):
 
         def __getitem__(self, idx):
             base_data_dict = self.retrieve_base_data(idx)
+            if base_data_dict is None:
+                return None
             base_data_dict = add_noise_data_dict(base_data_dict,self.params['noise_setting'])
 
             if self.lidar_augment:
@@ -473,6 +475,11 @@ def getAgnosticFusionDataset(cls):
 
 
         def collate_batch_train(self, batch):
+
+            batch = [data_dict for data_dict in batch if data_dict is not None]
+            if len(batch) == 0:
+                return None
+            
             # Intermediate fusion is different the other two
             output_dict = {'ego': {}}
             for cav_id in batch[0]:
