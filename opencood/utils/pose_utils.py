@@ -17,21 +17,21 @@ def add_noise_data_dict(data_dict, noise_setting):
             cav_content['params']['lidar_pose_clean'] = cav_content['params']['lidar_pose'] # 6 dof pose
 
             if "laplace" in noise_setting['args'].keys() and noise_setting['args']['laplace'] is True:
-                cav_content['params']['lidar_pose'] = cav_content['params']['lidar_pose'] + \
+                cav_content['params']['lidar_pose'] = (cav_content['params']['lidar_pose'] + \
                                                         generate_noise_laplace( # we just use the same key name
                                                             noise_setting['args']['pos_std'],
                                                             noise_setting['args']['rot_std'],
                                                             noise_setting['args']['pos_mean'],
                                                             noise_setting['args']['rot_mean']
-                                                        )
+                                                        )).tolist()
             else:
-                cav_content['params']['lidar_pose'] = cav_content['params']['lidar_pose'] + \
+                cav_content['params']['lidar_pose'] = (cav_content['params']['lidar_pose'] + \
                                                             generate_noise(
                                                                 noise_setting['args']['pos_std'],
                                                                 noise_setting['args']['rot_std'],
                                                                 noise_setting['args']['pos_mean'],
                                                                 noise_setting['args']['rot_mean']
-                                                            )
+                                                        )).tolist()
 
     else:
         for cav_id, cav_content in data_dict.items():

@@ -193,14 +193,14 @@ def main():
                         #                     method='3d',
                         #                     left_hand=left_hand)
                         
-                        vis_save_path = os.path.join(vis_save_path_root, 'bev_%05d.png' % i)
-                        simple_vis.visualize(infer_result,
-                                            batch_data['ego'][
-                                                'origin_lidar'][0],
-                                            hypes['postprocess']['gt_range'],
-                                            vis_save_path,
-                                            method='bev',
-                                            left_hand=left_hand)
+                        # vis_save_path = os.path.join(vis_save_path_root, 'bev_%05d.png' % i)
+                        # simple_vis.visualize(infer_result,
+                        #                     batch_data['ego'][
+                        #                         'origin_lidar'][0],
+                        #                     hypes['postprocess']['gt_range'],
+                        #                     vis_save_path,
+                        #                     method='bev',
+                        #                     left_hand=left_hand)
 
                 torch.cuda.empty_cache()
 

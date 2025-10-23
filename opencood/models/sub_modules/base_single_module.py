@@ -327,6 +327,17 @@ class DeforEncoderFusion(nn.Module):
     def quantize_feature_maps_FSQ(fp_tensor, bitwidth=2):
         return RoundWithGradient.apply((2 ** bitwidth - 1) * torch.sigmoid(fp_tensor))
     
+    def save_for_visualization(self, quantized_feature, decoded_feature):
+        # quantized_feature:  e.g. 1, 1, 100, 252
+        # decoded_feature: e.g. 1, 128, 100, 252
+        # pairwise_t_matrix: # B, cav_id, cav_id, 2, 3, 
+        # 存储不投影的吧
+        quantized_feature_ = quantized_feature.detach().cpu().numpy()
+        decoded_feature_ = decoded_feature.detach().cpu().numpy()
+        np.save('./tmp/quantized_feature.npy', quantized_feature_)
+        np.save('./tmp/decoded_feature_.npy', decoded_feature_)
+        pass
+    
     def forward(self, mlvl_feats, pairwise_t_matrix):
         # pairwise_t_matrix: # B, cav_id, cav_id, 4, 4
 
@@ -350,6 +361,8 @@ class DeforEncoderFusion(nn.Module):
             for j, module in enumerate(adapter):
                 mlvl_feats_out[i].append(module(mlvl_feats[i][j]))
 
+        # self.save_for_visualization(quantized_features[0], mlvl_feats_out[1][0])
+         
         #
         agent_lvl_embeds = []
         for key, embeds in self.agent_lvl_embeds.items():
