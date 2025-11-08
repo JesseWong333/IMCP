@@ -138,7 +138,7 @@ class V2V4REALBaseDataset(Dataset):
                 cav_list = [x for x in os.listdir(scenario_folder)
                             if os.path.isdir(
                         os.path.join(scenario_folder, x))]
-                random.shuffle(cav_list)
+                random.shuffle(cav_list)   # 训练时是随机选择 ego
             else:
                 cav_list = sorted([x for x in os.listdir(scenario_folder)
                                    if os.path.isdir(

@@ -1,4 +1,4 @@
-name: test_v2v4real_pointpillar_extend_second_adaper2
+name: v2v4real_pointpillar_extend_second_quantize_2_adapter_6
 root_dir: '/hd_cache/datasets/v2v4real/train'
 validate_dir: '/hd_cache/datasets/v2v4real/validate'
 # root_dir: /mimer/NOBACKUP/groups/junjie_storage/datasets/v2v4real/train
@@ -188,6 +188,11 @@ model:
         dim: [ 128 ]
         input_dim: 128 
 
+    dynamic_conv_channel: [8, 4, 2, 1]
+    n_downsample: 6
+    downsampler: 
+        second_v: [[256], [1]]
+
     # Fusion method
     # defor_encoder_fusion: 
     #   bev_h: *bev_h
@@ -227,11 +232,12 @@ model:
       lora_rank: 0
       anchor_number: 2
       # adapter parameters
-      n_adapters: 2
+      quantize_bit: 2
+      n_adapters: 6
       adapters: 
         ego: [[64, 128, 256], [128, 128, 128]]
         # second_v: [[64, 128, 256], [128, 128, 128]]
-        second_v: [[256], [128]]     
+        second_v: [[1], [128]]     
 
       # cross first
       block_cfgs: [[*embed_dims, 8, 8, 8, 8, 0.1, *agent_names, *feature_levels, 0, 0, ["cross_attn", "norm", "ffn", "norm"]],
