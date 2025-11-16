@@ -1,69 +1,39 @@
-"""
-Basedataset class for lidar data pre-processing
-"""
-
+'''
+base dataset for v2v4real dataset
+modified from RunshengXu's code
+by SizheWei
+'''
 import os
-import random
 from collections import OrderedDict
-
+import cv2
+import h5py
 import torch
 import numpy as np
 from torch.utils.data import Dataset
-
+from PIL import Image
+import json
+import random
+import math
 import opencood.utils.pcd_utils as pcd_utils
 from opencood.data_utils.augmentor.data_augmentor import DataAugmentor
 from opencood.hypes_yaml.yaml_utils import load_yaml
-from opencood.utils.pcd_utils import downsample_lidar_minimum
-from opencood.utils.transformation_utils import x1_to_x2, dist_two_pose, tfm_to_pose
+from opencood.utils.camera_utils import load_camera_data
+from opencood.utils.transformation_utils import dist_two_pose, tfm_to_pose
+from opencood.utils.transformation_utils import x1_to_x2
 from opencood.data_utils.pre_processor import build_preprocessor
 from opencood.data_utils.post_processor import build_postprocessor
-from opencood.utils import box_utils
-from PIL import Image, ImageDraw
 
-class V2V4REALBaseDataset(Dataset):
-    """
-    Base dataset for all kinds of fusion. Mainly used to assign correct
-    index.
 
-    Parameters
-    __________
-    params : dict
-        The dictionary contains all parameters for training/testing.
-
-    visualize : false
-        If set to true, the dataset is used for visualization.
-
-    Attributes
-    ----------
-    scenario_database : OrderedDict
-        A structured dictionary contains all file information.
-
-    len_record : list
-        The list to record each scenario's data length. This is used to
-        retrieve the correct index during training.
-
-    """
-
-    def __init__(self, params, visualize, train=True, isSim=False):
+class V2V4REALORIBaseDataset(Dataset):
+    def __init__(self, params, visualize, train=True):
         self.params = params
         self.visualize = visualize
         self.train = train
-        self.isSim = isSim
 
-        self.pre_processor_i = build_preprocessor(params[params['method_i']]["preprocess"], train)
-        self.pre_processor_v = build_preprocessor(params[params['method_v']]["preprocess"], train)
-
-        self.post_processor_i = build_postprocessor(params[params['method_i']]["postprocess"], train)
-        self.post_processor_v = build_postprocessor(params[params['method_v']]["postprocess"], train)
-
-        self.pre_processor = self.pre_processor_v
-        self.post_processor = self.post_processor_v
-
-        self.load_lidar_file = True if 'lidar' in params['input_source'] or self.visualize else False
-        self.load_camera_file = True if 'camera' in params['input_source'] else False
-
-        # self.data_augmentor = DataAugmentor(params['data_augment'],
-        #                                     train)
+        self.pre_processor = build_preprocessor(params["preprocess"], train)
+        self.post_processor = build_postprocessor(params["postprocess"], train)
+        self.data_augmentor = DataAugmentor(params['data_augment'],
+                                            train)
         if 'wild_setting' in params:
             self.seed = params['wild_setting']['seed']
             self.async_flag = params['wild_setting']['async']
@@ -80,7 +50,7 @@ class V2V4REALBaseDataset(Dataset):
                 params['wild_setting']['data_size'] \
                     if 'data_size' in params['wild_setting'] else 0
             self.transmission_speed = \
-                params['wild_setting']['transmission_speed']\
+                params['wild_setting']['transmission_speed'] \
                     if 'transmission_speed' in params['wild_setting'] else 27
             self.backbone_delay = \
                 params['wild_setting']['backbone_delay'] \
@@ -88,29 +58,62 @@ class V2V4REALBaseDataset(Dataset):
 
         else:
             self.async_flag = False
-            self.async_overhead = 0 # ms
+            self.async_overhead = 0  # ms
             self.async_mode = 'sim'
             self.loc_err_flag = False
             self.xyz_noise_std = 0
             self.ryp_noise_std = 0
-            self.data_size = 0 # Mb
-            self.transmission_speed = 27 # Mbps
-            self.backbone_delay = 0 # ms
+            self.data_size = 0  # Mb
+            self.transmission_speed = 27  # Mbps
+            self.backbone_delay = 0  # ms
 
         if self.train:
             root_dir = params['root_dir']
         else:
             root_dir = params['validate_dir']
+        self.root_dir = root_dir
 
-        if 'max_cav' not in params['train_params']:
-            self.max_cav = 7
+        print("Dataset dir:", root_dir)
+
+        if 'train_params' not in params or \
+                'max_cav' not in params['train_params']:
+            self.max_cav = 5
         else:
             self.max_cav = params['train_params']['max_cav']
 
+        if 'time_delay' in params:          # number of time delay
+            self.tau = params['time_delay']
+        else:
+            self.tau = 0
+
+        self.load_lidar_file = True if 'lidar' in params['input_source'] or self.visualize else False
+        self.load_camera_file = True if 'camera' in params['input_source'] else False
+        self.load_depth_file = True if 'depth' in params['input_source'] else False
+
+        self.label_type = params['label_type']  # 'lidar' or 'camera'
+        self.generate_object_center = self.generate_object_center_lidar if self.label_type == "lidar" \
+            else self.generate_object_center_camera
+        self.generate_object_center_single = self.generate_object_center  # will it follows 'self.generate_object_center' when 'self.generate_object_center' change?
+
+        if self.load_camera_file:
+            self.data_aug_conf = params["fusion"]["args"]["data_aug_conf"]
+
+        # by default, we load lidar, camera and metadata. But users may
+        # define additional inputs/tasks
+        self.add_data_extension = \
+            params['add_data_extension'] if 'add_data_extension' \
+                                            in params else []
+
+        if "noise_setting" not in self.params:
+            self.params['noise_setting'] = OrderedDict()
+            self.params['noise_setting']['add_noise'] = False
+
         # first load all paths of different scenarios
-        self.scenario_folders = sorted([os.path.join(root_dir, x)
+        scenario_folders = sorted([os.path.join(root_dir, x)
                                    for x in os.listdir(root_dir) if
                                    os.path.isdir(os.path.join(root_dir, x))])
+        self.scenario_folders = scenario_folders
+
         self.reinitialize()
 
     def __len__(self):
@@ -137,7 +140,8 @@ class V2V4REALBaseDataset(Dataset):
                 cav_list = [x for x in os.listdir(scenario_folder)
                             if os.path.isdir(
                         os.path.join(scenario_folder, x))]
-                random.shuffle(cav_list)   # 训练时是随机选择 ego
+                # cav_list = sorted(cav_list)
+                random.shuffle(cav_list)
             else:
                 cav_list = sorted([x for x in os.listdir(scenario_folder)
                                    if os.path.isdir(
@@ -153,43 +157,54 @@ class V2V4REALBaseDataset(Dataset):
             # loop over all CAV data
             for (j, cav_id) in enumerate(cav_list):
                 if j > self.max_cav - 1:
-                    print('too many cavs')
+                    print('too many cavs reinitialize')
                     break
                 self.scenario_database[i][cav_id] = OrderedDict()
 
                 # save all yaml files to the dictionary
                 cav_path = os.path.join(scenario_folder, cav_id)
 
-                # use the frame number as key, the full path as the values
-                # todo: hardcoded to remove additional yamls. no need to worry
-                # about this for users.
                 yaml_files = \
                     sorted([os.path.join(cav_path, x)
                             for x in os.listdir(cav_path) if
-                            x.endswith('.yaml') and 'additional' \
-                            not in x and 'camera_gt' not in x])
+                            x.endswith('.yaml') and 'additional' not in x])
                 timestamps = self.extract_timestamps(yaml_files)
 
                 for timestamp in timestamps:
                     self.scenario_database[i][cav_id][timestamp] = \
                         OrderedDict()
-
                     yaml_file = os.path.join(cav_path,
                                              timestamp + '.yaml')
                     lidar_file = os.path.join(cav_path,
                                               timestamp + '.pcd')
-                    camera_files = self.load_camera_files(cav_path, timestamp)
+                    camera_files = self.find_camera_files(cav_path,
+                                                          timestamp)
+                    depth_files = self.find_camera_files(cav_path,
+                                                         timestamp, sensor="depth")
 
                     self.scenario_database[i][cav_id][timestamp]['yaml'] = \
                         yaml_file
                     self.scenario_database[i][cav_id][timestamp]['lidar'] = \
                         lidar_file
-                    self.scenario_database[i][cav_id][timestamp]['camera0'] = \
+                    self.scenario_database[i][cav_id][timestamp]['cameras'] = \
                         camera_files
-                # Assume all cavs will have the same timestamps length. Thus
+                    self.scenario_database[i][cav_id][timestamp]['depths'] = \
+                        depth_files
+
+                    # load extra data
+                    for file_extension in self.add_data_extension:
+                        file_name = \
+                            os.path.join(cav_path,
+                                         timestamp + '_' + file_extension)
+
+                        self.scenario_database[i][cav_id][timestamp][
+                            file_extension] = file_name
+
+                        # Assume all cavs will have the same timestamps length. Thus
                 # we only need to calculate for the first vehicle in the
                 # scene.
                 if j == 0:
+                    # we regard the agent with the minimum id as the ego
                     self.scenario_database[i][cav_id]['ego'] = True
                     if not self.len_record:
                         self.len_record.append(len(timestamps))
@@ -239,7 +254,6 @@ class V2V4REALBaseDataset(Dataset):
         data = OrderedDict()
         # load files for all CAVs
         for cav_id, cav_content in scenario_database.items():
-            cav_id = int(cav_id)
             data[cav_id] = OrderedDict()
             data[cav_id]['ego'] = cav_content['ego']
 
@@ -262,26 +276,16 @@ class V2V4REALBaseDataset(Dataset):
                                                        timestamp_key,
                                                        timestamp_key_delay,
                                                        cur_ego_pose_flag)
+            # load lidar file
             data[cav_id]['lidar_np'] = \
                 pcd_utils.pcd_to_np(cav_content[timestamp_key_delay]['lidar'])
             data[cav_id]['folder_name'] = \
                 cav_content[timestamp_key_delay]['lidar'].split('/')[-3]
             data[cav_id]['index'] = timestamp_index
             data[cav_id]['cav_id'] = int(cav_id)
-            
-        # if self.train:
-        #     # randomly change the id of each cav for training; it's a data augmentation
-        #     # 随机打乱 cav_id 作为数据增强
-        #     original_cav_ids = list(data.keys())
-        #     shuffled_cav_ids = original_cav_ids.copy()
-        #     random.shuffle(shuffled_cav_ids)
-            
-        #     # 创建新的数据字典，使用打乱后的ID
-        #     new_data = OrderedDict()
-        #     for old_id, new_id in zip(original_cav_ids, shuffled_cav_ids):
-        #         new_data[new_id] = data[old_id]  
-        #     data = new_data
-                    
+        
+        data['0']['modality_name'] = 'm1'    
+        data['1']['modality_name'] = 'm2'
         return data
 
     @staticmethod
@@ -379,17 +383,22 @@ class V2V4REALBaseDataset(Dataset):
         if ego_flag:
             return 0
         # time delay real mode
-        if self.async_mode == 'real':
-            # noise/time is in ms unit
-            overhead_noise = np.random.uniform(0, self.async_overhead)
-            tc = self.data_size / self.transmission_speed * 1000
-            time_delay = int(overhead_noise + tc + self.backbone_delay)
-        elif self.async_mode == 'sim':
-            time_delay = np.abs(self.async_overhead)
+        if 'time_delay' in self.params:
+            return self.tau
+        else:
+            if self.async_mode == 'real':
+                # noise/time is in ms unit
+                overhead_noise = np.random.uniform(0, self.async_overhead)
+                tc = self.data_size / self.transmission_speed * 1000
+                time_delay = int(overhead_noise + tc + self.backbone_delay)
+            elif self.async_mode == 'sim':
+                time_delay = np.abs(self.async_overhead)
+            else:
+                time_delay = 0
 
-        # todo: current 10hz, we may consider 20hz in the future
-        time_delay = time_delay // 100
-        return time_delay if self.async_flag else 0
+            # todo: current 10hz, we may consider 20hz in the future(time delay in ms
+            time_delay = time_delay // 100
+            return time_delay if self.async_flag else 0
 
     def add_loc_noise(self, pose, xyz_std, ryp_std):
         """
@@ -451,12 +460,6 @@ class V2V4REALBaseDataset(Dataset):
         cur_ego_params = load_yaml(ego_content[timestamp_cur]['yaml'])
         delay_ego_params = load_yaml(ego_content[timestamp_delay]['yaml'])
 
-        # convert to [x, y, z, roll, yaw, pitch] pose
-        cur_params['lidar_pose'] = tfm_to_pose(cur_params['lidar_pose'])
-        delay_params['lidar_pose'] = tfm_to_pose(delay_params['lidar_pose'])
-        cur_ego_params['lidar_pose'] = tfm_to_pose(cur_ego_params['lidar_pose'])
-        delay_ego_params['lidar_pose'] = tfm_to_pose(delay_ego_params['lidar_pose'])
-
         # we need to calculate the transformation matrix from cav to ego
         # at the delayed timestamp
         delay_cav_lidar_pose = delay_params['lidar_pose']
@@ -495,10 +498,13 @@ class V2V4REALBaseDataset(Dataset):
             gt_transformation_matrix
         delay_params['spatial_correction_matrix'] = spatial_correction_matrix
 
+        delay_params['lidar_pose'] = tfm_to_pose(delay_params['lidar_pose'])
+        delay_params['true_ego_pos'] = tfm_to_pose(delay_params['true_ego_pos'])
+
         return delay_params
 
     @staticmethod
-    def load_camera_files(cav_path, timestamp):
+    def find_camera_files(cav_path, timestamp, sensor="camera"):
         """
         Retrieve the paths to all camera files.
 
@@ -510,19 +516,22 @@ class V2V4REALBaseDataset(Dataset):
         timestamp : str
             Current timestamp
 
+        sensor : str
+            "camera" or "depth"
+
         Returns
         -------
         camera_files : list
             The list containing all camera png file paths.
         """
         camera0_file = os.path.join(cav_path,
-                                    timestamp + '_camera0.png')
+                                    timestamp + f'_{sensor}0.png')
         camera1_file = os.path.join(cav_path,
-                                    timestamp + '_camera1.png')
+                                    timestamp + f'_{sensor}1.png')
         camera2_file = os.path.join(cav_path,
-                                    timestamp + '_camera2.png')
+                                    timestamp + f'_{sensor}2.png')
         camera3_file = os.path.join(cav_path,
-                                    timestamp + '_camera3.png')
+                                    timestamp + f'_{sensor}3.png')
         return [camera0_file, camera1_file, camera2_file, camera3_file]
 
     def project_points_to_bev_map(self, points, ratio=0.1):
@@ -546,32 +555,24 @@ class V2V4REALBaseDataset(Dataset):
         """
         return self.pre_processor.project_points_to_bev_map(points, ratio)
 
-
-    
-    def generate_object_center(self,
-                               cav_contents,
-                               reference_lidar_pose):
+    def augment(self, lidar_np, object_bbx_center, object_bbx_mask):
         """
-        reference lidar 's coordinate 
-        """
-        return self.post_processor.generate_object_center_v2v4real(cav_contents,
-                                                        reference_lidar_pose)
-    
-    def generate_object_center_single(self, cav_contents, reference_lidar_pose):
+        Given the raw point cloud, augment by flipping and rotation.
 
-        return self.post_processor.generate_object_center_v2v4real_single(cav_contents,
-                                                        reference_lidar_pose)
+        Parameters
+        ----------
+        lidar_np : np.ndarray
+            (n, 4) shape
 
-    def augment(self, lidar_np, object_bbx_center, object_bbx_mask,
-                flip=None, rotation=None, scale=None):
-        """
+        object_bbx_center : np.ndarray
+            (n, 7) shape to represent bbx's x, y, z, h, w, l, yaw
+
+        object_bbx_mask : np.ndarray
+            Indicate which elements in object_bbx_center are padded.
         """
         tmp_dict = {'lidar_np': lidar_np,
                     'object_bbx_center': object_bbx_center,
-                    'object_bbx_mask': object_bbx_mask,
-                    'flip': flip,
-                    'noise_rotation': rotation,
-                    'noise_scale': scale}
+                    'object_bbx_mask': object_bbx_mask}
         tmp_dict = self.data_augmentor.forward(tmp_dict)
 
         lidar_np = tmp_dict['lidar_np']
@@ -580,105 +581,82 @@ class V2V4REALBaseDataset(Dataset):
 
         return lidar_np, object_bbx_center, object_bbx_mask
 
-    def collate_batch_train(self, batch):
+    def generate_object_center_lidar(self,
+                                     cav_contents,
+                                     reference_lidar_pose):
         """
-        Customized collate function for pytorch dataloader during training
-        for late fusion dataset.
+        Retrieve all objects in a format of (n, 7), where 7 represents
+        x, y, z, l, w, h, yaw or x, y, z, h, w, l, yaw.
+        The object_bbx_center is in ego coordinate.
+
+        Notice: it is a wrap of postprocessor
 
         Parameters
         ----------
-        batch : dict
+        cav_contents : list
+            List of dictionary, save all cavs' information.
+            in fact it is used in get_item_single_car, so the list length is 1
+
+        reference_lidar_pose : list
+            The final target lidar pose with length 6.
 
         Returns
         -------
-        batch : dict
-            Reformatted batch.
+        object_np : np.ndarray
+            Shape is (max_num, 7).
+        mask : np.ndarray
+            Shape is (max_num,).
+        object_ids : list
+            Length is number of bbx in current sample.
         """
-        # during training, we only care about ego.
-        output_dict = {'ego': {}}
+        return self.post_processor.generate_object_center_v2v4real(cav_contents,
+                                                                   reference_lidar_pose)
 
-        object_bbx_center = []
-        object_bbx_mask = []
-        processed_lidar_list = []
-        label_dict_list = []
+    def generate_object_center_camera(self,
+                                      cav_contents,
+                                      reference_lidar_pose):
+        """
+        Retrieve all objects in a format of (n, 7), where 7 represents
+        x, y, z, l, w, h, yaw or x, y, z, h, w, l, yaw.
+        The object_bbx_center is in ego coordinate.
 
-        if self.visualize:
-            origin_lidar = []
+        Notice: it is a wrap of postprocessor
 
-        for i in range(len(batch)):
-            ego_dict = batch[i]['ego']
-            object_bbx_center.append(ego_dict['object_bbx_center'])
-            object_bbx_mask.append(ego_dict['object_bbx_mask'])
-            processed_lidar_list.append(ego_dict['processed_lidar'])
-            label_dict_list.append(ego_dict['label_dict'])
+        Parameters
+        ----------
+        cav_contents : list
+            List of dictionary, save all cavs' information.
+            in fact it is used in get_item_single_car, so the list length is 1
 
-            if self.visualize:
-                origin_lidar.append(ego_dict['origin_lidar'])
+        reference_lidar_pose : list
+            The final target lidar pose with length 6.
 
-        # convert to numpy, (B, max_num, 7)
-        object_bbx_center = torch.from_numpy(np.array(object_bbx_center))
-        object_bbx_mask = torch.from_numpy(np.array(object_bbx_mask))
+        visibility_map : np.ndarray
+            for OPV2V, its 256*256 resolution. 0.39m per pixel. heading up.
 
-        processed_lidar_torch_dict = \
-            self.pre_processor.collate_batch(processed_lidar_list)
-        label_torch_dict = \
-            self.post_processor.collate_batch(label_dict_list)
-        output_dict['ego'].update({'object_bbx_center': object_bbx_center,
-                                   'object_bbx_mask': object_bbx_mask,
-                                   'processed_lidar': processed_lidar_torch_dict,
-                                   'label_dict': label_torch_dict})
-        if self.visualize:
-            origin_lidar = \
-                np.array(downsample_lidar_minimum(pcd_np_list=origin_lidar))
-            origin_lidar = torch.from_numpy(origin_lidar)
-            output_dict['ego'].update({'origin_lidar': origin_lidar})
+        Returns
+        -------
+        object_np : np.ndarray
+            Shape is (max_num, 7).
+        mask : np.ndarray
+            Shape is (max_num,).
+        object_ids : list
+            Length is number of bbx in current sample.
+        """
+        return self.post_processor.generate_visible_object_center(
+            cav_contents, reference_lidar_pose
+        )
 
-        return output_dict
-
-    def visualize_result(self, pred_box_tensor,
-                         gt_tensor,
-                         pcd,
-                         show_vis,
-                         save_path,
-                         dataset=None):
-        self.post_processor.visualize(pred_box_tensor,
-                                      gt_tensor,
-                                      pcd,
-                                      show_vis,
-                                      save_path,
-                                      dataset=dataset)
-
-    def shape_to_mask(self, rects, shape_type=None):
-        img_shape = [self.params['bev_h'], self.params['bev_w']]
-        mask = np.zeros(img_shape[:2], dtype=np.uint8)
-        mask = Image.fromarray(mask)
-        draw = ImageDraw.Draw(mask)
-
-        for rect in rects:
-            xy = [(point[0], point[1]) for point in rect]
-            draw.polygon(xy=xy, outline=1, fill=1) # xy 为[(x,y),(x.y),(...,...),...]
-        mask = np.array(mask)
-        return mask
-
-    def scale_boxes(self, boxes):
-        # boxes: N, 4, 2
-        # scale_y = 100 / (40*2)
-        # scale_x = 252 / (100.8*2)
-        pc_range = self.params[self.params['method_i']]["preprocess"]['cav_lidar_range']
-        bev_shape = [self.params['bev_h'], self.params['bev_w']]
-
-        scale_y = bev_shape[0] / (pc_range[4] - pc_range[1])
-        scale_x = bev_shape[1] / (pc_range[3] - pc_range[0])
-
-        boxes[:, :, 0] = (boxes[:, :, 0] - pc_range[0])* scale_x
-        boxes[:, :, 1] = (boxes[:, :, 1] - pc_range[1])* scale_y
-   
-        return boxes
-
-    def create_seg_mask(self, object_bbx_center, object_bbx_mask):
-        object_bbx = object_bbx_center[object_bbx_mask==1]
-        objects_2d = box_utils.boxes_to_corners2d(object_bbx, 'hwl')
-        
-        label_objects = self.scale_boxes(objects_2d)
-        seg_mask = self.shape_to_mask(label_objects)
-        return seg_mask
+    def get_ext_int(self, params, camera_id):
+        camera_coords = np.array(params["camera%d" % camera_id]["cords"]).astype(
+            np.float32)
+        camera_to_lidar = x1_to_x2(
+            camera_coords, params["lidar_pose_clean"]
+        ).astype(np.float32)  # T_LiDAR_camera
+        camera_to_lidar = camera_to_lidar @ np.array(
+            [[0, 0, 1, 0], [1, 0, 0, 0], [0, -1, 0, 0], [0, 0, 0, 1]],
+            dtype=np.float32)  # UE4 coord to opencv coord
+        camera_intrinsic = np.array(params["camera%d" % camera_id]["intrinsic"]).astype(
+            np.float32
+        )
+        return camera_to_lidar, camera_intrinsic

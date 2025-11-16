@@ -25,16 +25,18 @@ noise_setting:
     pos_mean: 0
     rot_mean: 0
 
-bev_h: &bev_h 48
-bev_w: &bev_w 176
-train_agent_ID: &train_agent_ID -1  # -2为end-end训练， -1固定住encoder，0,1,2为各自的ID； 0是ego, 1是infra
+# bev_h: &bev_h 48
+# bev_w: &bev_w 176
+bev_h: &bev_h 96
+bev_w: &bev_w 352
+train_agent_ID: &train_agent_ID -2  # -2为end-end训练， -1固定住encoder，0,1,2为各自的ID； 0是ego, 1是infra
 
 method_v: &method_v point_pillar
 method_i: &method_i point_pillar_shrink
 
 # method_v_path: ./opencood/logs/v_point_pillar_2024_08_01_17_43_01/net_epoch_bestval_at13.pth
-method_ego_path: ./opencood/logs/v2v4real_aug_single0_2024_09_04_00_42_40/net_epoch_bestval_at51.pth
-method_i_path: ./opencood/logs/v2v4real_aug_single1_2024_09_04_14_58_53/net_epoch_bestval_at57.pth
+# method_ego_path: ./opencood/logs/v2v4real_aug_single0_2024_09_04_00_42_40/net_epoch_bestval_at51.pth
+# method_i_path: ./opencood/logs/v2v4real_aug_single1_2024_09_04_14_58_53/net_epoch_bestval_at57.pth
 
 yaml_parser: ["load_point_pillar_params", "load_second_params", "load_point_pillar_params_shrink"]
 train_params:
@@ -57,13 +59,13 @@ fusion:
 
 # data_augment:
 #   - NAME: random_world_flip
-#     ALONG_AXIS_LIST: [ 'x' ]
+  #   ALONG_AXIS_LIST: [ 'x' ]
 
-#   - NAME: random_world_rotation
-#     WORLD_ROT_ANGLE: [ -0.78539816, 0.78539816 ]
+  # - NAME: random_world_rotation
+  #   WORLD_ROT_ANGLE: [ -0.78539816, 0.78539816 ]
 
-#   - NAME: random_world_scaling
-#     WORLD_SCALE_RANGE: [ 0.95, 1.05 ]
+  # - NAME: random_world_scaling
+  #   WORLD_SCALE_RANGE: [ 0.95, 1.05 ]
 
 
 # 不同的方法有不同的前处理和后处理
@@ -90,7 +92,7 @@ point_pillar:
       w: 1.6
       h: 1.56
       r: [0, 90]
-      feature_stride: 4
+      feature_stride: 2
       num: 2
     target_args:
       pos_threshold: 0.6
@@ -123,7 +125,7 @@ point_pillar_shrink:
       w: 1.6
       h: 1.56
       r: [0, 90]
-      feature_stride: 4
+      feature_stride: 2
       num: 2
     target_args:
       pos_threshold: 0.6
@@ -155,7 +157,7 @@ second:
       w: 1.6
       h: 1.56
       r: [0, 90]
-      feature_stride: 8
+      feature_stride: 4
       num: 2
     target_args:
       pos_threshold: 0.6
@@ -231,7 +233,7 @@ model:
         num_upsample_filter: [128, 128, 128]
       shrink_header:  # downsample 2x
         kernal_size: [3]
-        stride: [2]
+        stride: [1]
         padding: [1]
         dim: [256]
         input_dim: 384 # 128 * 3 
@@ -293,7 +295,7 @@ model:
     defor_encoder_fusion: 
       bev_h: *bev_h
       bev_w: *bev_w
-      discrete_ratio: 1.6      # 48 --> 76.8
+      discrete_ratio: 0.8      # 48 --> 76.8 (1.6)  变为 96 --> 76.8 (0.8)
       embed_dims: &embed_dims 128 # 128 for multi-scale; 384 for single scale
       max_num_agent: *max_cav
       agent_names: &agent_names ["ego", "point_pillar_v"]
@@ -302,7 +304,8 @@ model:
       lora_rank: 0
       anchor_number: 2
       # adapter parameters
-      n_adapters: 3
+      return_intermediate: false
+      n_adapters: 0
       adapters: 
         ego: [[64, 128, 256], [128, 128, 128]]
         point_pillar_v: [[64, 128, 256], [128, 128, 128]]

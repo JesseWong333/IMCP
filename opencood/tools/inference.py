@@ -73,6 +73,9 @@ def main():
     hypes['test_dir'] = hypes['validate_dir']
     if "OPV2V" in hypes['test_dir'] or "v2xsim" in hypes['test_dir']:
         assert "test" in hypes['validate_dir']
+        
+    if 'v2v4real' in hypes['test_dir'].lower() and "postprocess" in hypes:
+        hypes['postprocess']['gt_range'] = [-100, -40, -5, 100, 40, 3]
     
     # This is used in visualization
     # left hand: OPV2V, V2XSet

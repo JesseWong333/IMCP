@@ -95,6 +95,26 @@ class PointPillarLoss(nn.Module):
         reg_loss = weighted_smooth_l1_loss(reg_preds, reg_targets, weights=reg_weights, sigma=self.reg['sigma'])
         reg_loss = reg_loss.sum() * self.reg['weight'] / batch_size
 
+        if 'aux_outputs' in output_dict:
+            aux_cls_loss = 0
+            aux_reg_loss = 0
+            num_aux = len(output_dict['aux_outputs'])
+            for aux_out in output_dict['aux_outputs']:
+                # cls loss
+                aux_cls_preds = aux_out[f'cls_preds{suffix}'].permute(0, 2, 3, 1).contiguous() \
+                            .view(batch_size, -1,  1)
+                aux_cls_loss += sigmoid_focal_loss(aux_cls_preds, cls_labls, weights=cls_weights, **self.cls)
+                
+                # reg loss
+                aux_reg_preds = aux_out[f'reg_preds{suffix}'].permute(0, 2, 3, 1).contiguous().view(batch_size, -1, 7)
+                aux_reg_preds, _ = self.add_sin_difference(aux_reg_preds, reg_targets)
+                aux_reg_loss += weighted_smooth_l1_loss(aux_reg_preds, reg_targets, weights=reg_weights, sigma=self.reg['sigma'])
+            
+            aux_cls_loss = aux_cls_loss.sum() * self.cls['weight'] / (batch_size * num_aux)
+            aux_reg_loss = aux_reg_loss.sum() * self.reg['weight'] / (batch_size * num_aux)
+
+            cls_loss += aux_cls_loss
+            reg_loss += aux_reg_loss
 
         ######## direction ##########
         if self.dir:

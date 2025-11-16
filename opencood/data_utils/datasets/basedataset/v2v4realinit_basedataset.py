@@ -17,10 +17,9 @@ from opencood.utils.pcd_utils import downsample_lidar_minimum
 from opencood.utils.transformation_utils import x1_to_x2, dist_two_pose, tfm_to_pose
 from opencood.data_utils.pre_processor import build_preprocessor
 from opencood.data_utils.post_processor import build_postprocessor
-from opencood.utils import box_utils
-from PIL import Image, ImageDraw
 
-class V2V4REALBaseDataset(Dataset):
+
+class V2V4REALINITBaseDataset(Dataset):
     """
     Base dataset for all kinds of fusion. Mainly used to assign correct
     index.
@@ -50,20 +49,10 @@ class V2V4REALBaseDataset(Dataset):
         self.train = train
         self.isSim = isSim
 
-        self.pre_processor_i = build_preprocessor(params[params['method_i']]["preprocess"], train)
-        self.pre_processor_v = build_preprocessor(params[params['method_v']]["preprocess"], train)
-
-        self.post_processor_i = build_postprocessor(params[params['method_i']]["postprocess"], train)
-        self.post_processor_v = build_postprocessor(params[params['method_v']]["postprocess"], train)
-
-        self.pre_processor = self.pre_processor_v
-        self.post_processor = self.post_processor_v
-
-        self.load_lidar_file = True if 'lidar' in params['input_source'] or self.visualize else False
-        self.load_camera_file = True if 'camera' in params['input_source'] else False
-
-        # self.data_augmentor = DataAugmentor(params['data_augment'],
-        #                                     train)
+        self.pre_processor = build_preprocessor(params["preprocess"], train)   # 这个前后处理是为了适应添加的
+        self.post_processor = build_postprocessor(params["postprocess"], train)
+        self.data_augmentor = DataAugmentor(params['data_augment'],
+                                            train)
         if 'wild_setting' in params:
             self.seed = params['wild_setting']['seed']
             self.async_flag = params['wild_setting']['async']
@@ -97,6 +86,11 @@ class V2V4REALBaseDataset(Dataset):
             self.transmission_speed = 27 # Mbps
             self.backbone_delay = 0 # ms
 
+        self.load_lidar_file = True
+        self.load_camera_file = True if 'camera' in params['input_source'] else False
+        self.generate_object_center = self.generate_object_center_lidar
+        self.generate_object_center_single = self.generate_object_center  # 
+        
         if self.train:
             root_dir = params['root_dir']
         else:
@@ -133,11 +127,12 @@ class V2V4REALBaseDataset(Dataset):
             self.scenario_database.update({i: OrderedDict()})
 
             # at least 1 cav should show up
+            # at least 1 cav should show up
             if self.train:
                 cav_list = [x for x in os.listdir(scenario_folder)
                             if os.path.isdir(
                         os.path.join(scenario_folder, x))]
-                random.shuffle(cav_list)   # 训练时是随机选择 ego
+                random.shuffle(cav_list)
             else:
                 cav_list = sorted([x for x in os.listdir(scenario_folder)
                                    if os.path.isdir(
@@ -239,7 +234,6 @@ class V2V4REALBaseDataset(Dataset):
         data = OrderedDict()
         # load files for all CAVs
         for cav_id, cav_content in scenario_database.items():
-            cav_id = int(cav_id)
             data[cav_id] = OrderedDict()
             data[cav_id]['ego'] = cav_content['ego']
 
@@ -268,20 +262,6 @@ class V2V4REALBaseDataset(Dataset):
                 cav_content[timestamp_key_delay]['lidar'].split('/')[-3]
             data[cav_id]['index'] = timestamp_index
             data[cav_id]['cav_id'] = int(cav_id)
-            
-        # if self.train:
-        #     # randomly change the id of each cav for training; it's a data augmentation
-        #     # 随机打乱 cav_id 作为数据增强
-        #     original_cav_ids = list(data.keys())
-        #     shuffled_cav_ids = original_cav_ids.copy()
-        #     random.shuffle(shuffled_cav_ids)
-            
-        #     # 创建新的数据字典，使用打乱后的ID
-        #     new_data = OrderedDict()
-        #     for old_id, new_id in zip(original_cav_ids, shuffled_cav_ids):
-        #         new_data[new_id] = data[old_id]  
-        #     data = new_data
-                    
         return data
 
     @staticmethod
@@ -451,12 +431,6 @@ class V2V4REALBaseDataset(Dataset):
         cur_ego_params = load_yaml(ego_content[timestamp_cur]['yaml'])
         delay_ego_params = load_yaml(ego_content[timestamp_delay]['yaml'])
 
-        # convert to [x, y, z, roll, yaw, pitch] pose
-        cur_params['lidar_pose'] = tfm_to_pose(cur_params['lidar_pose'])
-        delay_params['lidar_pose'] = tfm_to_pose(delay_params['lidar_pose'])
-        cur_ego_params['lidar_pose'] = tfm_to_pose(cur_ego_params['lidar_pose'])
-        delay_ego_params['lidar_pose'] = tfm_to_pose(delay_ego_params['lidar_pose'])
-
         # we need to calculate the transformation matrix from cav to ego
         # at the delayed timestamp
         delay_cav_lidar_pose = delay_params['lidar_pose']
@@ -494,6 +468,9 @@ class V2V4REALBaseDataset(Dataset):
         delay_params['gt_transformation_matrix'] = \
             gt_transformation_matrix
         delay_params['spatial_correction_matrix'] = spatial_correction_matrix
+        
+        delay_params['lidar_pose'] = tfm_to_pose(delay_params['lidar_pose'])
+        delay_params['true_ego_pos'] = tfm_to_pose(delay_params['true_ego_pos'])
 
         return delay_params
 
@@ -545,22 +522,6 @@ class V2V4REALBaseDataset(Dataset):
 
         """
         return self.pre_processor.project_points_to_bev_map(points, ratio)
-
-
-    
-    def generate_object_center(self,
-                               cav_contents,
-                               reference_lidar_pose):
-        """
-        reference lidar 's coordinate 
-        """
-        return self.post_processor.generate_object_center_v2v4real(cav_contents,
-                                                        reference_lidar_pose)
-    
-    def generate_object_center_single(self, cav_contents, reference_lidar_pose):
-
-        return self.post_processor.generate_object_center_v2v4real_single(cav_contents,
-                                                        reference_lidar_pose)
 
     def augment(self, lidar_np, object_bbx_center, object_bbx_mask,
                 flip=None, rotation=None, scale=None):
@@ -635,6 +596,37 @@ class V2V4REALBaseDataset(Dataset):
 
         return output_dict
 
+    def generate_object_center_lidar(self,
+                                     cav_contents,
+                                     reference_lidar_pose):
+        """
+        Retrieve all objects in a format of (n, 7), where 7 represents
+        x, y, z, l, w, h, yaw or x, y, z, h, w, l, yaw.
+        The object_bbx_center is in ego coordinate.
+
+        Notice: it is a wrap of postprocessor
+
+        Parameters
+        ----------
+        cav_contents : list
+            List of dictionary, save all cavs' information.
+            in fact it is used in get_item_single_car, so the list length is 1
+
+        reference_lidar_pose : list
+            The final target lidar pose with length 6.
+
+        Returns
+        -------
+        object_np : np.ndarray
+            Shape is (max_num, 7).
+        mask : np.ndarray
+            Shape is (max_num,).
+        object_ids : list
+            Length is number of bbx in current sample.
+        """
+        return self.post_processor.generate_object_center_v2v4real(cav_contents,
+                                                                   reference_lidar_pose)
+        
     def visualize_result(self, pred_box_tensor,
                          gt_tensor,
                          pcd,
@@ -647,38 +639,3 @@ class V2V4REALBaseDataset(Dataset):
                                       show_vis,
                                       save_path,
                                       dataset=dataset)
-
-    def shape_to_mask(self, rects, shape_type=None):
-        img_shape = [self.params['bev_h'], self.params['bev_w']]
-        mask = np.zeros(img_shape[:2], dtype=np.uint8)
-        mask = Image.fromarray(mask)
-        draw = ImageDraw.Draw(mask)
-
-        for rect in rects:
-            xy = [(point[0], point[1]) for point in rect]
-            draw.polygon(xy=xy, outline=1, fill=1) # xy 为[(x,y),(x.y),(...,...),...]
-        mask = np.array(mask)
-        return mask
-
-    def scale_boxes(self, boxes):
-        # boxes: N, 4, 2
-        # scale_y = 100 / (40*2)
-        # scale_x = 252 / (100.8*2)
-        pc_range = self.params[self.params['method_i']]["preprocess"]['cav_lidar_range']
-        bev_shape = [self.params['bev_h'], self.params['bev_w']]
-
-        scale_y = bev_shape[0] / (pc_range[4] - pc_range[1])
-        scale_x = bev_shape[1] / (pc_range[3] - pc_range[0])
-
-        boxes[:, :, 0] = (boxes[:, :, 0] - pc_range[0])* scale_x
-        boxes[:, :, 1] = (boxes[:, :, 1] - pc_range[1])* scale_y
-   
-        return boxes
-
-    def create_seg_mask(self, object_bbx_center, object_bbx_mask):
-        object_bbx = object_bbx_center[object_bbx_mask==1]
-        objects_2d = box_utils.boxes_to_corners2d(object_bbx, 'hwl')
-        
-        label_objects = self.scale_boxes(objects_2d)
-        seg_mask = self.shape_to_mask(label_objects)
-        return seg_mask

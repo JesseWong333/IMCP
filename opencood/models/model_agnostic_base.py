@@ -75,10 +75,11 @@ class ModelAgnosticBase(nn.Module):
         self.train_agent_ID = args['train_agent_ID']
         
         n_downsample_layers =  args['n_downsample'] if 'n_downsample' in args else 0
-        downsample_dict = OrderedDict()
-        for name, in_out_channels in args['downsampler'].items():
-            downsample_dict[name] = self.create_adapter(in_out_channels[0], in_out_channels[1], n_downsample_layers, 0)
-        self.downsample_layers = nn.ModuleDict(downsample_dict)
+        if n_downsample_layers > 0:
+            downsample_dict = OrderedDict()
+            for name, in_out_channels in args['downsampler'].items():
+                downsample_dict[name] = self.create_adapter(in_out_channels[0], in_out_channels[1], n_downsample_layers, 0)
+            self.downsample_layers = nn.ModuleDict(downsample_dict)
 
     def create_adapter(self, input_filters, output_filters, n_adapter_layers, lora_rank):
         adapter_list = []

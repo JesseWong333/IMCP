@@ -262,12 +262,17 @@ class DeforEncoderFusion(nn.Module):
             adapter_dict[name] = self.create_adapter(in_out_channels[0], in_out_channels[1], name, n_adapter_layers, self.lora_rank)
         self.adapters = nn.ModuleDict(adapter_dict)
 
-        self.cls_head = lora.Conv2d(model_cfg['head_embed_dims'], model_cfg['anchor_number'],
-                                  kernel_size=1, r = 0)
-        self.reg_head = lora.Conv2d(model_cfg['head_embed_dims'], 7 * model_cfg['anchor_number'],
-                                  kernel_size=1, r = 0)
+        self.cls_head = nn.Linear(model_cfg['head_embed_dims'], model_cfg['anchor_number'])
+        self.reg_head = nn.Linear(model_cfg['head_embed_dims'], 7 * model_cfg['anchor_number'])
         
-        self.quantize_bit = model_cfg['quantize_bit']
+        self.out_norm = nn.LayerNorm(model_cfg['head_embed_dims'])
+        if 'quantize_bit' in model_cfg:
+            self.quantize_bit = model_cfg['quantize_bit']
+        
+        if 'return_intermediate' in model_cfg:
+            self.return_intermediate = model_cfg['return_intermediate']
+        else:
+            self.return_intermediate = False
 
     # def create_adapter(self, input_filters, output_filters):
     #     adapter_list = []
@@ -348,8 +353,9 @@ class DeforEncoderFusion(nn.Module):
         
         # non-ego feature quantization
         # self.quantize_feature_maps
-        quantized_features = [self.quantize_feature_maps_FSQ(non_ego_feature, bitwidth=self.quantize_bit) for non_ego_feature in mlvl_feats[1]]
-        mlvl_feats[1] = quantized_features
+        if hasattr(self, 'quantize_bit'):
+            quantized_features = [self.quantize_feature_maps_FSQ(non_ego_feature, bitwidth=self.quantize_bit) for non_ego_feature in mlvl_feats[1]]
+            mlvl_feats[1] = quantized_features
         
         pairwise_t_matrix = self.get_normalized_transformation(pairwise_t_matrix)
 
@@ -368,7 +374,7 @@ class DeforEncoderFusion(nn.Module):
         for key, embeds in self.agent_lvl_embeds.items():
             agent_lvl_embeds.append(embeds)
 
-        out = []
+        batch_out = []
         batch_size = mlvl_feats_out[0][0].shape[0]
         for b in range(batch_size):
 
@@ -411,16 +417,35 @@ class DeforEncoderFusion(nn.Module):
             bev_pos = self.positional_encoding(bev_mask).to(feat.dtype) # [1, num_feats*2, h, w]
             bev_pos = bev_pos.flatten(2).permute(0, 2, 1) # [1, C, h*w]->[1, h*w, C] 
 
+            intermediate_outputs = []
             for _, block in enumerate(self.blocks):
                 bev_queries = block(bev_queries, bev_pos, feat_flatten, ref_2d, spatial_shapes, spatial_shapes_self)  # [1, H*W, C]
-            
-            bev_queries = bev_queries.permute(0, 2, 1).view(1, self.embed_dims, self.bev_h, self.bev_w)  # 就是这个问题，其他的不行也是因为我没有permute
-            out.append(bev_queries)
+                if self.return_intermediate:
+                    intermediate_outputs.append(self.out_norm(bev_queries))
+           
+            output = self.out_norm(bev_queries)
+            if self.return_intermediate:
+                intermediate_outputs.pop()
+                intermediate_outputs.append(output)
+                
+            if self.return_intermediate:
+                output = torch.stack(intermediate_outputs) # 6, 1, H*W, C
+            else:
+                output = output.unsqueeze(0)  # 1, 1, H*W, C
+            # output = output.permute(0, 1, 3, 2).view(-1, 1, self.embed_dims, self.bev_h, self.bev_w)  # 就是这个问题，其他的不行也是因为我没有permute
+            output = output.view(-1, 1, self.bev_h, self.bev_w, self.embed_dims)
+            batch_out.append(output)
 
-        fused_features = torch.cat(out, dim=0)
+        fused_features = torch.cat(batch_out, dim=1)
         psm = self.cls_head(fused_features)
         rm = self.reg_head(fused_features)
-        output_dict = {'cls_preds': psm,
-                        'reg_preds': rm}
+        psm = psm.permute(0, 1, 4, 2, 3)
+        rm = rm.permute(0, 1, 4, 2, 3)
+        output_dict = {'cls_preds': psm[-1],
+                        'reg_preds': rm[-1]}
+        
+        if self.return_intermediate:
+            output_dict['aux_outputs'] = [{'cls_preds': a, 'reg_preds': b} for a, b in zip(psm[:-1], rm[:-1])]
+        
         return fused_features, output_dict
     

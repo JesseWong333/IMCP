@@ -10,6 +10,8 @@ from opencood.data_utils.datasets.basedataset.dairv2xWdelay_basedataset import D
 from opencood.data_utils.datasets.basedataset.v2xset_basedataset import V2XSETBaseDataset
 from opencood.data_utils.datasets.basedataset.tumtraf_v2x_basedataset import TUMTRAFBaseDataset
 from opencood.data_utils.datasets.basedataset.v2v4real_basedataset import V2V4REALBaseDataset
+from opencood.data_utils.datasets.basedataset.v2v4realori_basedataset import V2V4REALORIBaseDataset
+from opencood.data_utils.datasets.basedataset.v2v4realinit_basedataset import V2V4REALINITBaseDataset
 
 def build_dataset(dataset_cfg, visualize=False, train=True):
     fusion_name = dataset_cfg['fusion']['core_method']
