@@ -140,6 +140,7 @@ dataset
 opencood/logs
 .vscode/
 
+explogs/
 /tmp
 *.out
 hpc_log

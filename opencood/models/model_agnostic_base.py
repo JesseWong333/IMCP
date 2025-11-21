@@ -129,7 +129,8 @@ class ModelAgnosticBase(nn.Module):
             data_dict_v = self.repack_data(data_dict, 0)
             data_dict_i = self.repack_data(data_dict, 1)
             feature_v, _ = self.model_v(data_dict_v)
-            feature_i, _ = self.model_i(data_dict_i) 
+            # feature_i, _ = self.model_i(data_dict_i) 
+            feature_i, _ = self.model_v(data_dict_i)  # shared weights
             # fusion module
             _, output_dict = self.model_fusion( [feature_v, feature_i], pairwise_t_matrix)
             return output_dict
@@ -144,13 +145,13 @@ class ModelAgnosticBase(nn.Module):
                 feature_i, output_dict = self.model_i(data_dict_i)
             
                 # sparsify non-ego agents
-                prob = output_dict['cls_preds'].permute(0, 2, 3, 1).softmax(dim=-1)[..., 1]
-                scale_factors =  [f.shape[-1] / prob.shape[-1] for f in feature_i]
-                scales_masks = [F.interpolate(prob.unsqueeze(1), scale_factor=s, mode='nearest') > 0.8 for s in scale_factors]
+                # prob = output_dict['cls_preds'].permute(0, 2, 3, 1).softmax(dim=-1)[..., 1]
+                # scale_factors =  [f.shape[-1] / prob.shape[-1] for f in feature_i]
+                # scales_masks = [F.interpolate(prob.unsqueeze(1), scale_factor=s, mode='nearest') > 0.8 for s in scale_factors]
             
             # downsample
-            for agent_name, downsamplers in self.downsample_layers.items():
-                feature_i =  [ downsampler(f) for f, downsampler in zip(feature_i, downsamplers)]
+            # for agent_name, downsamplers in self.downsample_layers.items():
+            #     feature_i =  [ downsampler(f) for f, downsampler in zip(feature_i, downsamplers)]
             
             # feature_i = [f * mask for f, mask in zip(feature_i, scales_masks)]
             # feature_i = [f.masked_fill(~mask, 1e-6) for f, mask in zip(feature_i, scales_masks)]
@@ -163,8 +164,9 @@ class ModelAgnosticBase(nn.Module):
             single_batch_dict = self.repack_data(data_dict, self.train_agent_ID)
         
             if self.train_agent_ID == 0:
-                feature_v, _ = self.model_v(single_batch_dict)
+                feature_v, aux_output_dict = self.model_v(single_batch_dict)
                 _, output_dict = self.model_fusion( [feature_v], pairwise_t_matrix[:, 0:1, 0:1])
+                output_dict['aux_outputs'] = [aux_output_dict]
             else:
                 _, output_dict = self.model_i(single_batch_dict)
      

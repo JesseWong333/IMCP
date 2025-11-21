@@ -1,4 +1,4 @@
-name: v2v4real_aug_single1
+name: v2v4real_aug_pointpillar_single0_with_aux_loss
 root_dir: '/hd_cache/datasets/v2v4real/train'
 validate_dir: '/hd_cache/datasets/v2v4real/validate'
 test_dir: '/hd_cache/datasets/v2v4real/test'
@@ -26,16 +26,16 @@ noise_setting:
     pos_mean: 0
     rot_mean: 0
 
-bev_h: &bev_h 48
-bev_w: &bev_w 176
-train_agent_ID: &train_agent_ID 1  # -2为end-end训练， -1固定住encoder，0,1,2为各自的ID； 0是ego, 1是infra
+bev_h: &bev_h 100
+bev_w: &bev_w 252
+train_agent_ID: &train_agent_ID 0  # -2为end-end训练， -1固定住encoder，0,1,2为各自的ID； 0是ego, 1是infra
 
 method_v: &method_v point_pillar
 method_i: &method_i point_pillar
 
 # method_v_path: ./opencood/logs/v_point_pillar_2024_08_01_17_43_01/net_epoch_bestval_at13.pth
-method_ego_path: ./opencood/logs/ego_pointpillar_2024_08_13_13_06_12/net_epoch_bestval_at13.pth
-method_i_path: ./opencood/logs/i_point_pillar_2024_08_01_17_41_50/net_epoch_bestval_at15.pth
+# method_ego_path: ./opencood/logs/ego_pointpillar_2024_08_13_13_06_12/net_epoch_bestval_at13.pth
+# method_i_path: ./opencood/logs/i_point_pillar_2024_08_01_17_41_50/net_epoch_bestval_at15.pth
 
 yaml_parser: ["load_point_pillar_params", "load_second_params"]
 train_params:
@@ -79,7 +79,7 @@ point_pillar:
       max_voxel_train: 32000
       max_voxel_test: 70000
     # lidar range for each individual cav.
-    cav_lidar_range: &point_pillar_cav_lidar [-140.8, -38.4, -5, 140.8, 38.4, 3]
+    cav_lidar_range: &point_pillar_cav_lidar [-100.8, -40, -5, 100.8, 40, 3]
   
   # anchor box related
   postprocess:
@@ -87,11 +87,11 @@ point_pillar:
     gt_range: [-100, -40, -5, 100, 40, 3]
     anchor_args:
       cav_lidar_range: *point_pillar_cav_lidar
-      l: 3.9
-      w: 1.6
+      l: 4.5
+      w: 2
       h: 1.56
       r: [0, 90]
-      feature_stride: 4
+      feature_stride: 2
       num: 2
     target_args:
       pos_threshold: 0.6
@@ -112,18 +112,18 @@ second:
       max_voxel_train: 32000
       max_voxel_test: 70000
     # lidar range for each individual cav. Format: xyzxyz minmax
-    cav_lidar_range: &second_cav_lidar [-140.8, -38.4, -5, 140.8, 38.4, 3]
+    cav_lidar_range: &second_cav_lidar [-100.8, -40, -5, 100.8, 40, 3]
   
   postprocess:
     core_method: 'VoxelPostprocessor' # VoxelPostprocessor, BevPostprocessor supported
-    gt_range: *second_cav_lidar
+    gt_range: [-100, -40, -5, 100, 40, 3]
     anchor_args:
       cav_lidar_range: *second_cav_lidar
-      l: 3.9
-      w: 1.6
+      l: 4.5
+      w: 2
       h: 1.56
       r: [0, 90]
-      feature_stride: 8
+      feature_stride: 4
       num: 2
     target_args:
       pos_threshold: 0.6
@@ -175,7 +175,7 @@ model:
         num_upsample_filter: [128, 128, 128]
       shrink_header:  # downsample 2x
         kernal_size: [3]
-        stride: [2]
+        stride: [1]
         padding: [1]
         dim: [256]
         input_dim: 384 # 128 * 3
@@ -237,6 +237,7 @@ model:
     defor_encoder_fusion: 
       bev_h: *bev_h
       bev_w: *bev_w
+      discrete_ratio: 0.8
       embed_dims: &embed_dims 128 # 128 for multi-scale; 384 for single scale
       max_num_agent: *max_cav
       # agent_names: &agent_names ["ego", "point_pillar_v"]
@@ -245,7 +246,7 @@ model:
       lora_rank: 0
       anchor_number: 2
       # adapter parameters
-      n_adapters: 5
+      n_adapters: 0
       adapters: 
         ego: [[64, 128, 256], [128, 128, 128]]
         # point_pillar_v: [[64, 128, 256], [128, 128, 128]]

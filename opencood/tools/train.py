@@ -82,7 +82,8 @@ def main():
         load_results = model.load_state_dict(ego_model_dict, strict=False)
         print("load unexpected_keys:" + str(load_results.unexpected_keys))
         
-        extra_agent_name = hypes['model']['args']['defor_encoder_fusion']['agent_names'][1]
+        # extra_agent_name = hypes['model']['args']['defor_encoder_fusion']['agent_names'][1]
+        extra_agent_name = "model_fusion"  # tune all the parameters of fusion module
         print("tuning parameters:")
         for name, value in model.named_parameters():
             # only tune Lora and paeameters assiaated with agent_names

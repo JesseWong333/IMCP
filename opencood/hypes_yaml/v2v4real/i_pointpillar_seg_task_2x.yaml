@@ -26,8 +26,8 @@ noise_setting:
     pos_mean: 0
     rot_mean: 0
 
-bev_h: &bev_h 96
-bev_w: &bev_w 352
+bev_h: &bev_h 100
+bev_w: &bev_w 252
 train_agent_ID: &train_agent_ID 1  # -2为end-end训练， -1固定住encoder，0,1,2为各自的ID； 0是ego, 1是infra
 
 method_v: &method_v point_pillar
@@ -81,7 +81,7 @@ point_pillar:
       max_voxel_train: 32000
       max_voxel_test: 70000
     # lidar range for each individual cav.
-    cav_lidar_range: &point_pillar_cav_lidar [-140.8, -38.4, -5, 140.8, 38.4, 3]
+    cav_lidar_range: &point_pillar_cav_lidar [-100.8, -40, -5, 100.8, 40, 3]
   
   # anchor box related
   postprocess:
@@ -89,11 +89,11 @@ point_pillar:
     gt_range: [-100, -40, -5, 100, 40, 3]
     anchor_args:
       cav_lidar_range: *point_pillar_cav_lidar
-      l: 3.9
-      w: 1.6
+      l: 4.5
+      w: 2
       h: 1.56
       r: [0, 90]
-      feature_stride: 4
+      feature_stride: 2
       num: 2
     target_args:
       pos_threshold: 0.6
@@ -114,15 +114,15 @@ second:
       max_voxel_train: 32000
       max_voxel_test: 70000
     # lidar range for each individual cav. Format: xyzxyz minmax
-    cav_lidar_range: &second_cav_lidar [-140.8, -38.4, -5, 140.8, 38.4, 3]
+    cav_lidar_range: &second_cav_lidar [-100.8, -40, -5, 100.8, 40, 3]
   
   postprocess:
     core_method: 'VoxelPostprocessor' # VoxelPostprocessor, BevPostprocessor supported
     gt_range: *second_cav_lidar
     anchor_args:
       cav_lidar_range: *second_cav_lidar
-      l: 3.9
-      w: 1.6
+      l: 4.5
+      w: 2
       h: 1.56
       r: [0, 90]
       feature_stride: 8

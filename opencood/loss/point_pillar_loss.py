@@ -110,11 +110,13 @@ class PointPillarLoss(nn.Module):
                 aux_reg_preds, _ = self.add_sin_difference(aux_reg_preds, reg_targets)
                 aux_reg_loss += weighted_smooth_l1_loss(aux_reg_preds, reg_targets, weights=reg_weights, sigma=self.reg['sigma'])
             
-            aux_cls_loss = aux_cls_loss.sum() * self.cls['weight'] / (batch_size * num_aux)
-            aux_reg_loss = aux_reg_loss.sum() * self.reg['weight'] / (batch_size * num_aux)
+            aux_cls_loss = aux_cls_loss.sum() * self.cls['weight'] / batch_size
+            aux_reg_loss = aux_reg_loss.sum() * self.reg['weight'] / batch_size
 
             cls_loss += aux_cls_loss
             reg_loss += aux_reg_loss
+            cls_loss = cls_loss / (num_aux + 1)
+            reg_loss = reg_loss / (num_aux + 1)
 
         ######## direction ##########
         if self.dir:

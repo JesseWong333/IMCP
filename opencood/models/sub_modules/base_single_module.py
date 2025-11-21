@@ -7,8 +7,6 @@ import torch.nn.functional as F
 import numpy as np
 from collections import OrderedDict
 
-from opencood.models.sub_modules.dynamic_layers import DynamicConv2d, DynamicBatchNorm2d
-
 from opencood.models.sub_modules.pillar_vfe import PillarVFE
 from opencood.models.sub_modules.point_pillar_scatter import PointPillarScatter
 from opencood.models.sub_modules.base_bev_backbone import BaseBEVBackbone
@@ -108,9 +106,9 @@ class Adapter(nn.Module):
         self.conv0 = nn.Sequential(
                 # lora.Conv2d(input_filter, output_filter, kernel_size=1, r=lora_rank),
                 # nn.BatchNorm2d(output_filter),
-                DynamicConv2d(input_filter, output_filter, kernel_size=1),
-                DynamicBatchNorm2d(output_filter),
-                nn.ReLU(inplace=True)
+                nn.Conv2d(input_filter, output_filter, kernel_size=1),
+                nn.BatchNorm2d(output_filter),
+                # nn.ReLU(inplace=True)
             )
         
         layers = []
@@ -240,8 +238,8 @@ class DeforEncoderFusion(nn.Module):
         self.lora_rank = model_cfg["lora_rank"]
 
         # bev 
-        self.bev_embedding = lora.Embedding(self.bev_h * self.bev_w, self.embed_dims, r = 0)
-        self.bev_index = torch.linspace(0, self.bev_h * self.bev_w -1, self.bev_h * self.bev_w, dtype=torch.long).cuda()
+        self.bev_embedding = nn.Embedding(
+                self.bev_h * self.bev_w, self.embed_dims)
 
         self.positional_encoding = LearnedPositionalEncoding(        
             num_feats=self.embed_dims//2,
@@ -249,11 +247,17 @@ class DeforEncoderFusion(nn.Module):
             col_num_embed=self.bev_w)
         
         # 不同agent的不同level的feature_lvl没有可比性，每个都给
-        agent_lvl_embeding_dict = {}
-        for agent_name, feature_level in zip(self.agent_names, self.feature_levels):
-            agent_lvl_embeding_dict[agent_name] = nn.Parameter(torch.Tensor(feature_level, self.embed_dims))
-            normal_(agent_lvl_embeding_dict[agent_name])
-        self.agent_lvl_embeds = nn.ParameterDict(agent_lvl_embeding_dict)
+        # agent_lvl_embeding_dict = {}
+        # for agent_name, feature_level in zip(self.agent_names, self.feature_levels):
+        #     agent_lvl_embeding_dict[agent_name] = nn.Parameter(torch.Tensor(feature_level, self.embed_dims))
+        #     normal_(agent_lvl_embeding_dict[agent_name])
+        # self.agent_lvl_embeds = nn.ParameterDict(agent_lvl_embeding_dict)
+        self.level_embeds = nn.Parameter(
+            torch.Tensor(3, self.embed_dims))
+        self.agent_embeds = nn.Parameter(
+            torch.Tensor(2, self.embed_dims))
+        normal_(self.level_embeds)
+        normal_(self.agent_embeds)
         
         # adapter
         n_adapter_layers =  model_cfg['n_adapters'] if 'n_adapters' in model_cfg else 0
@@ -265,7 +269,6 @@ class DeforEncoderFusion(nn.Module):
         self.cls_head = nn.Linear(model_cfg['head_embed_dims'], model_cfg['anchor_number'])
         self.reg_head = nn.Linear(model_cfg['head_embed_dims'], 7 * model_cfg['anchor_number'])
         
-        self.out_norm = nn.LayerNorm(model_cfg['head_embed_dims'])
         if 'quantize_bit' in model_cfg:
             self.quantize_bit = model_cfg['quantize_bit']
         
@@ -370,9 +373,9 @@ class DeforEncoderFusion(nn.Module):
         # self.save_for_visualization(quantized_features[0], mlvl_feats_out[1][0])
          
         #
-        agent_lvl_embeds = []
-        for key, embeds in self.agent_lvl_embeds.items():
-            agent_lvl_embeds.append(embeds)
+        # agent_lvl_embeds = []
+        # for key, embeds in self.agent_lvl_embeds.items():
+        #     agent_lvl_embeds.append(embeds)
 
         batch_out = []
         batch_size = mlvl_feats_out[0][0].shape[0]
@@ -394,7 +397,9 @@ class DeforEncoderFusion(nn.Module):
                     spatial_shape = (h, w)
                     # lvl embeding
                     feat = feat.flatten(2).transpose(1, 2) # 1, h*w, c
-                    feat = feat + agent_lvl_embeds[agent_index][None, lvl:lvl + 1, :]
+                    # feat = feat + agent_lvl_embeds[agent_index][None, lvl:lvl + 1, :]
+                    feat = feat + self.level_embeds[None, lvl:lvl + 1, :].to(feat.dtype)
+                    feat = feat + self.agent_embeds[agent_index: agent_index+1, None, :].to(feat.dtype)
                     spatial_shapes.append(spatial_shape)
                     feat_flatten.append(feat)
 
@@ -409,7 +414,7 @@ class DeforEncoderFusion(nn.Module):
             spatial_shapes_self = [(self.bev_h, self.bev_w)]
             spatial_shapes_self = torch.as_tensor(spatial_shapes_self, dtype=torch.long, device=feat.device)
 
-            bev_queries = self.bev_embedding(self.bev_index)  # H*W, C  # run_forward, 得到全部的
+            bev_queries = self.bev_embedding.weight.to(feat.dtype)  # H*W, C  # run_forward, 得到全部的
 
             bev_queries = bev_queries.unsqueeze(0) #  [1, H*W, C]
             bev_mask = torch.zeros((1, self.bev_h, self.bev_w),
@@ -421,17 +426,12 @@ class DeforEncoderFusion(nn.Module):
             for _, block in enumerate(self.blocks):
                 bev_queries = block(bev_queries, bev_pos, feat_flatten, ref_2d, spatial_shapes, spatial_shapes_self)  # [1, H*W, C]
                 if self.return_intermediate:
-                    intermediate_outputs.append(self.out_norm(bev_queries))
+                    intermediate_outputs.append(bev_queries)
            
-            output = self.out_norm(bev_queries)
-            if self.return_intermediate:
-                intermediate_outputs.pop()
-                intermediate_outputs.append(output)
-                
             if self.return_intermediate:
                 output = torch.stack(intermediate_outputs) # 6, 1, H*W, C
             else:
-                output = output.unsqueeze(0)  # 1, 1, H*W, C
+                output = bev_queries.unsqueeze(0)  # 1, 1, H*W, C
             # output = output.permute(0, 1, 3, 2).view(-1, 1, self.embed_dims, self.bev_h, self.bev_w)  # 就是这个问题，其他的不行也是因为我没有permute
             output = output.view(-1, 1, self.bev_h, self.bev_w, self.embed_dims)
             batch_out.append(output)

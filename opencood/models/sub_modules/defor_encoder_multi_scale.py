@@ -310,6 +310,7 @@ class DeforEncoderMultiScale(nn.Module):
                 feat_flatten.append(feat)  # [N, h*w, C]
             
             feat_flatten = torch.cat(feat_flatten, 1) # N, H*W+...+H3*W3, C
+            feat_flatten = feat_flatten.view(1, N*feat_flatten.shape[1], feat_flatten.shape[2])  # 1, N*(h*w+...+), C
             ref_2d = self.get_reference_points(
                self.bev_h, self.bev_w, device=feat.device, dtype=feat.dtype) # 1, H*W, 1, 2
            
