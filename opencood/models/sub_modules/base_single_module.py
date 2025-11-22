@@ -140,9 +140,9 @@ class PointPillar(nn.Module):
         self.scatter = PointPillarScatter(args['point_pillar_scatter'])
 
         if 'resnet' in args['base_bev_backbone'] and args['base_bev_backbone']['resnet']:
-            self.backbone = BaseBEVBackbone(args['base_bev_backbone'], 64)
-        else:
             self.backbone = ResNetBEVBackbone(args['base_bev_backbone'], 64)
+        else:
+            self.backbone = BaseBEVBackbone(args['base_bev_backbone'], 64)
         if 'shrink_header' in args:
             self.shrink_flag = True
             self.shrink_conv = DownsampleConv(args['shrink_header'])
@@ -163,7 +163,7 @@ class PointPillar(nn.Module):
 
         batch_dict = self.pillar_vfe(batch_dict)  # 这里是其提取特征的方式，不同的方法应该不同
         batch_dict = self.scatter(batch_dict)
-        batch_dict, ret_dict = self.backbone(batch_dict)  # ret_dict存放了多个级别的特征
+        batch_dict = self.backbone(batch_dict)  # ret_dict存放了多个级别的特征
         if self.shrink_flag:
             batch_dict['spatial_features_2d'] = self.shrink_conv(batch_dict['spatial_features_2d'])
         psm_single = self.single_cls_head(batch_dict['spatial_features_2d'])
@@ -173,7 +173,7 @@ class PointPillar(nn.Module):
         if self.seg_flag:
             seg_single = self.single_seg_head(batch_dict['spatial_features_2d'])
             output_dict.update({'seg_preds': seg_single})
-        multi_feature = [ret_dict[key] for key in ret_dict]
+        multi_feature = batch_dict['multiscale_features']
         return multi_feature, output_dict
 
 class Second(nn.Module):

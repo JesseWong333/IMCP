@@ -97,14 +97,14 @@ class BaseBEVBackbone(nn.Module):
         spatial_features = data_dict['spatial_features']
 
         ups = []
-        ret_dict = {}
+        ret_dict = []
         x = spatial_features
 
         for i in range(len(self.blocks)):
             x = self.blocks[i](x)
 
             stride = int(spatial_features.shape[2] / x.shape[2])
-            ret_dict['spatial_features_%dx' % stride] = x
+            ret_dict.append(x)
 
             if len(self.deblocks) > 0:
                 ups.append(self.deblocks[i](x))
@@ -120,9 +120,9 @@ class BaseBEVBackbone(nn.Module):
             x = self.deblocks[-1](x)
 
         data_dict['spatial_features_2d'] = x # [N,C,100,352]
+        data_dict['multiscale_features'] = ret_dict
 
-        return data_dict, ret_dict
-        # return data_dict
+        return data_dict
 
     def get_multiscale_feature(self, spatial_features):
         """

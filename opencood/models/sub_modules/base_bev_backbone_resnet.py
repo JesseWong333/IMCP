@@ -91,8 +91,8 @@ class ResNetBEVBackbone(nn.Module):
         spatial_features = data_dict['spatial_features']
 
         x = self.resnet(spatial_features)  # tuple of features
+        data_dict['multiscale_features'] = x
         ups = []
-
         for i in range(self.num_levels):
             if len(self.deblocks) > 0:
                 ups.append(self.deblocks[i](x[i]))
