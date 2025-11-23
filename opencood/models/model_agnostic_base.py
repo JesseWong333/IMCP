@@ -165,10 +165,9 @@ class ModelAgnosticBase(nn.Module):
             single_batch_dict = self.repack_data(data_dict, self.train_agent_ID)
         
             if self.train_agent_ID == 0:
-                feature_v, aux_output_dict = self.model_v(single_batch_dict)
+                feature_v, _ = self.model_v(single_batch_dict)
                 pairwise_t_matrix  = torch.eye(4)[None, None, None, :, :].repeat(feature_v[0].shape[0], 2, 2, 1, 1).to(feature_v[0].device)  # B, 1, 1, 4, 4
                 _, output_dict = self.model_fusion( [feature_v], pairwise_t_matrix, cav_id_list)
-                output_dict['aux_outputs'] = [aux_output_dict]
             else:
                 _, output_dict = self.model_i(single_batch_dict)
      

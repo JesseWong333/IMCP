@@ -1,4 +1,4 @@
-name: v2v4real_aug_pointpillar_single0_with_aux_loss
+name: v2v4real_aug_pointpillar_single0
 root_dir: '/hd_cache/datasets/v2v4real/train'
 validate_dir: '/hd_cache/datasets/v2v4real/validate'
 test_dir: '/hd_cache/datasets/v2v4real/test'
