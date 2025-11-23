@@ -166,7 +166,7 @@ class ModelAgnosticBase(nn.Module):
         
             if self.train_agent_ID == 0:
                 feature_v, aux_output_dict = self.model_v(single_batch_dict)
-                _, output_dict = self.model_fusion( [feature_v], pairwise_t_matrix[:, 0:1, 0:1], ego_id)
+                _, output_dict = self.model_fusion( [feature_v], pairwise_t_matrix[:, 0:1, 0:1], [0]*feature_v[0].shape[0])
                 output_dict['aux_outputs'] = [aux_output_dict]
             else:
                 _, output_dict = self.model_i(single_batch_dict)
