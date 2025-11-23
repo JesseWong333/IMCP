@@ -114,6 +114,7 @@ class ModelAgnosticBase(nn.Module):
 
     def forward(self, data_dict):
         pairwise_t_matrix = data_dict['ego']['pairwise_t_matrix'] # B, cav_id, cav_id, 4, 4
+        ego_id = data_dict['ego']['ego_id']
 
         if self.train_agent_ID == -4:
             # vehicle
@@ -122,7 +123,7 @@ class ModelAgnosticBase(nn.Module):
             with torch.no_grad():
                 feature_v, _ = self.model_v(data_dict_v)
             feature_i, _ = self.model_i(data_dict_i)
-            _, output_dict = self.model_fusion( [feature_v, feature_i], pairwise_t_matrix)
+            _, output_dict = self.model_fusion( [feature_v, feature_i], pairwise_t_matrix, ego_id)
             return output_dict
 
         if self.train_agent_ID == -2:
@@ -132,7 +133,7 @@ class ModelAgnosticBase(nn.Module):
             # feature_i, _ = self.model_i(data_dict_i) 
             feature_i, _ = self.model_v(data_dict_i)  # shared weights
             # fusion module
-            _, output_dict = self.model_fusion( [feature_v, feature_i], pairwise_t_matrix, data_dict['ego']['ego_id'])
+            _, output_dict = self.model_fusion( [feature_v, feature_i], pairwise_t_matrix, ego_id)
             return output_dict
 
         if self.train_agent_ID == -1 or self.train_agent_ID == -3:
@@ -165,7 +166,7 @@ class ModelAgnosticBase(nn.Module):
         
             if self.train_agent_ID == 0:
                 feature_v, aux_output_dict = self.model_v(single_batch_dict)
-                _, output_dict = self.model_fusion( [feature_v], pairwise_t_matrix[:, 0:1, 0:1])
+                _, output_dict = self.model_fusion( [feature_v], pairwise_t_matrix[:, 0:1, 0:1], ego_id)
                 output_dict['aux_outputs'] = [aux_output_dict]
             else:
                 _, output_dict = self.model_i(single_batch_dict)
