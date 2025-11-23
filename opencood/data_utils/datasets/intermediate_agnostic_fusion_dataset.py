@@ -469,8 +469,7 @@ def getAgnosticFusionDataset(cls):
 
 
             processed_data_dict['ego'].update({'sample_idx': idx,
-                                                'cav_id_list': cav_id_list,
-                                                'ego_id': ego_id })
+                                                'cav_id_list': cav_id_list })
 
             return processed_data_dict
 
@@ -496,7 +495,7 @@ def getAgnosticFusionDataset(cls):
             lidar_pose_list = []
             origin_lidar = []
             lidar_pose_clean_list = []
-            ego_ids = []
+            cav_id_list = []
 
             # pairwise transformation matrix
             pairwise_t_matrix_list = []
@@ -519,8 +518,8 @@ def getAgnosticFusionDataset(cls):
             for i in range(len(batch)):
                 ego_dict = batch[i].pop('ego')
                 output_dict['ego'].update({
-                    "sample_idx": ego_dict['sample_idx'],
-                    "cav_id_list": ego_dict['cav_id_list']
+                    "sample_idx": ego_dict['sample_idx']
+                    # "cav_id_list": ego_dict['cav_id_list']
                 })
                 object_bbx_center.append(ego_dict['object_bbx_center'])
                 object_bbx_mask.append(ego_dict['object_bbx_mask'])
@@ -531,7 +530,7 @@ def getAgnosticFusionDataset(cls):
                 record_len.append(ego_dict['cav_num'])
                 label_dict_list.append(ego_dict['label_dict'])
                 pairwise_t_matrix_list.append(ego_dict['pairwise_t_matrix'])
-                ego_ids.append(ego_dict['ego_id'])
+                cav_id_list.append(ego_dict['cav_id_list'])
 
                 if self.visualize:
                     origin_lidar.append(ego_dict['origin_lidar'])
@@ -604,7 +603,7 @@ def getAgnosticFusionDataset(cls):
                                     'lidar_pose_clean': lidar_pose_clean,
                                     'lidar_pose': lidar_pose,
                                     'anchor_box': self.anchor_box_torch,
-                                    'ego_id': ego_ids
+                                    'cav_id_list': cav_id_list
                                     })
 
 

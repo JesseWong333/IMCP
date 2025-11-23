@@ -346,7 +346,7 @@ class DeforEncoderFusion(nn.Module):
         np.save('./tmp/decoded_feature_.npy', decoded_feature_)
         pass
     
-    def forward(self, mlvl_feats, pairwise_t_matrix, ego_ids):
+    def forward(self, mlvl_feats, pairwise_t_matrix, cav_id_list_batch):
         # pairwise_t_matrix: # B, cav_id, cav_id, 4, 4
 
         #  这里需要考虑多种情形，包括多种级别的特征，多种类型的特征
@@ -380,7 +380,7 @@ class DeforEncoderFusion(nn.Module):
         batch_out = []
         batch_size = mlvl_feats_out[0][0].shape[0]
         for b in range(batch_size):
-            ego_id = ego_ids[b]
+            cav_id_list = cav_id_list_batch[b]
             # Step1: 取对应的batch_size
             mlvl_feats_b = []
             for i in range(len(mlvl_feats_out)):
@@ -390,14 +390,15 @@ class DeforEncoderFusion(nn.Module):
             feat_flatten = []
             spatial_shapes = []
             # Step2: 对非ego特征进行transform, 特征拉直， 加embedding
-            for agent_index, per_agent_features in enumerate(mlvl_feats_b):
+            for cav_id, per_agent_features in enumerate(mlvl_feats_b):
                 for lvl, feat in enumerate(per_agent_features):
                     _, c, h, w = feat.shape
-                    feat = warp_affine_simple(feat, t_matrix[ego_id, agent_index:agent_index+1, :, :], (h, w)) 
+                    agent_index = cav_id_list.index(cav_id)
+                    feat = warp_affine_simple(feat, t_matrix[0, agent_index:agent_index+1, :, :], (h, w)) # t_matrix有shuffle
                     spatial_shape = (h, w)
                     # lvl embeding
                     feat = feat.flatten(2).transpose(1, 2) # 1, h*w, c
-                    feat = feat + agent_lvl_embeds[agent_index][None, lvl:lvl + 1, :]
+                    feat = feat + agent_lvl_embeds[cav_id][None, lvl:lvl + 1, :]
                     # feat = feat + self.level_embeds[None, lvl:lvl + 1, :].to(feat.dtype)
                     # feat = feat + self.agent_embeds[agent_index: agent_index+1, None, :].to(feat.dtype)
                     spatial_shapes.append(spatial_shape)
