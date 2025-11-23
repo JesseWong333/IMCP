@@ -247,17 +247,17 @@ class DeforEncoderFusion(nn.Module):
             col_num_embed=self.bev_w)
         
         # 不同agent的不同level的feature_lvl没有可比性，每个都给
-        # agent_lvl_embeding_dict = {}
-        # for agent_name, feature_level in zip(self.agent_names, self.feature_levels):
-        #     agent_lvl_embeding_dict[agent_name] = nn.Parameter(torch.Tensor(feature_level, self.embed_dims))
-        #     normal_(agent_lvl_embeding_dict[agent_name])
-        # self.agent_lvl_embeds = nn.ParameterDict(agent_lvl_embeding_dict)
-        self.level_embeds = nn.Parameter(
-            torch.Tensor(3, self.embed_dims))
-        self.agent_embeds = nn.Parameter(
-            torch.Tensor(2, self.embed_dims))
-        normal_(self.level_embeds)
-        normal_(self.agent_embeds)
+        agent_lvl_embeding_dict = {}
+        for agent_name, feature_level in zip(self.agent_names, self.feature_levels):
+            agent_lvl_embeding_dict[agent_name] = nn.Parameter(torch.Tensor(feature_level, self.embed_dims))
+            normal_(agent_lvl_embeding_dict[agent_name])
+        self.agent_lvl_embeds = nn.ParameterDict(agent_lvl_embeding_dict)
+        # self.level_embeds = nn.Parameter(
+        #     torch.Tensor(3, self.embed_dims))
+        # self.agent_embeds = nn.Parameter(
+        #     torch.Tensor(2, self.embed_dims))
+        # normal_(self.level_embeds)
+        # normal_(self.agent_embeds)
         
         # adapter
         n_adapter_layers =  model_cfg['n_adapters'] if 'n_adapters' in model_cfg else 0
@@ -346,7 +346,7 @@ class DeforEncoderFusion(nn.Module):
         np.save('./tmp/decoded_feature_.npy', decoded_feature_)
         pass
     
-    def forward(self, mlvl_feats, pairwise_t_matrix):
+    def forward(self, mlvl_feats, pairwise_t_matrix, ego_ids):
         # pairwise_t_matrix: # B, cav_id, cav_id, 4, 4
 
         #  这里需要考虑多种情形，包括多种级别的特征，多种类型的特征
@@ -373,14 +373,14 @@ class DeforEncoderFusion(nn.Module):
         # self.save_for_visualization(quantized_features[0], mlvl_feats_out[1][0])
          
         #
-        # agent_lvl_embeds = []
-        # for key, embeds in self.agent_lvl_embeds.items():
-        #     agent_lvl_embeds.append(embeds)
+        agent_lvl_embeds = []
+        for key, embeds in self.agent_lvl_embeds.items():
+            agent_lvl_embeds.append(embeds)
 
         batch_out = []
         batch_size = mlvl_feats_out[0][0].shape[0]
         for b in range(batch_size):
-
+            ego_id = ego_ids[b]
             # Step1: 取对应的batch_size
             mlvl_feats_b = []
             for i in range(len(mlvl_feats_out)):
@@ -393,13 +393,13 @@ class DeforEncoderFusion(nn.Module):
             for agent_index, per_agent_features in enumerate(mlvl_feats_b):
                 for lvl, feat in enumerate(per_agent_features):
                     _, c, h, w = feat.shape
-                    feat = warp_affine_simple(feat, t_matrix[0, agent_index:agent_index+1, :, :], (h, w)) 
+                    feat = warp_affine_simple(feat, t_matrix[ego_id, agent_index:agent_index+1, :, :], (h, w)) 
                     spatial_shape = (h, w)
                     # lvl embeding
                     feat = feat.flatten(2).transpose(1, 2) # 1, h*w, c
-                    # feat = feat + agent_lvl_embeds[agent_index][None, lvl:lvl + 1, :]
-                    feat = feat + self.level_embeds[None, lvl:lvl + 1, :].to(feat.dtype)
-                    feat = feat + self.agent_embeds[agent_index: agent_index+1, None, :].to(feat.dtype)
+                    feat = feat + agent_lvl_embeds[agent_index][None, lvl:lvl + 1, :]
+                    # feat = feat + self.level_embeds[None, lvl:lvl + 1, :].to(feat.dtype)
+                    # feat = feat + self.agent_embeds[agent_index: agent_index+1, None, :].to(feat.dtype)
                     spatial_shapes.append(spatial_shape)
                     feat_flatten.append(feat)
 

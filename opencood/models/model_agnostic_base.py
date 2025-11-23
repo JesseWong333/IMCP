@@ -132,7 +132,7 @@ class ModelAgnosticBase(nn.Module):
             # feature_i, _ = self.model_i(data_dict_i) 
             feature_i, _ = self.model_v(data_dict_i)  # shared weights
             # fusion module
-            _, output_dict = self.model_fusion( [feature_v, feature_i], pairwise_t_matrix)
+            _, output_dict = self.model_fusion( [feature_v, feature_i], pairwise_t_matrix, data_dict['ego']['ego_id'])
             return output_dict
 
         if self.train_agent_ID == -1 or self.train_agent_ID == -3:

@@ -268,20 +268,7 @@ class V2V4REALBaseDataset(Dataset):
                 cav_content[timestamp_key_delay]['lidar'].split('/')[-3]
             data[cav_id]['index'] = timestamp_index
             data[cav_id]['cav_id'] = int(cav_id)
-            
-        # if self.train:
-        #     # randomly change the id of each cav for training; it's a data augmentation
-        #     # 随机打乱 cav_id 作为数据增强
-        #     original_cav_ids = list(data.keys())
-        #     shuffled_cav_ids = original_cav_ids.copy()
-        #     random.shuffle(shuffled_cav_ids)
-            
-        #     # 创建新的数据字典，使用打乱后的ID
-        #     new_data = OrderedDict()
-        #     for old_id, new_id in zip(original_cav_ids, shuffled_cav_ids):
-        #         new_data[new_id] = data[old_id]  
-        #     data = new_data
-                    
+                             
         return data
 
     @staticmethod
