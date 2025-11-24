@@ -108,7 +108,7 @@ class Adapter(nn.Module):
                 # nn.BatchNorm2d(output_filter),
                 nn.Conv2d(input_filter, output_filter, kernel_size=1),
                 nn.BatchNorm2d(output_filter),
-                # nn.ReLU(inplace=True)
+                nn.ReLU(inplace=True)
             )
         
         layers = []

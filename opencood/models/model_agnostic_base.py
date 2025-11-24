@@ -158,7 +158,7 @@ class ModelAgnosticBase(nn.Module):
             # feature_i = [f.masked_fill(~mask, 1e-6) for f, mask in zip(feature_i, scales_masks)]
             
             # fusion module
-            _, output_dict = self.model_fusion( [feature_v, feature_i], pairwise_t_matrix)
+            _, output_dict = self.model_fusion( [feature_v, feature_i], pairwise_t_matrix, cav_id_list)
             return output_dict
 
         else:

@@ -28,10 +28,10 @@ bev_w: &bev_w 252
 train_agent_ID: &train_agent_ID -1  # -2为end-end训练， -1固定住encoder，0,1,2为各自的ID； 0是ego, 1是infra
 
 method_v: &method_v point_pillar
-method_i: &method_i point_pillar
+method_i: &method_i point_pillar_shrink
 
 # method_v_path: ./opencood/logs/v_point_pillar_2024_08_01_17_43_01/net_epoch_bestval_at13.pth
-method_ego_path: ./opencood/logs/v2v4real_w_aug_pointpillar_single0_2025_11_18_15_39_03/net_epoch_bestval_at55.pth
+method_ego_path: ./opencood/logs/v2v4real_aug_pointpillar_single0_2025_11_23_20_03_53/net_epoch45.pth
 method_i_path: ./opencood/logs/v2v4real_aug_pointpillar_single1_2025_11_18_16_49_20/net_epoch57.pth
 
 yaml_parser: ["load_point_pillar_params", "load_second_params", "load_point_pillar_params_shrink"]
@@ -226,7 +226,7 @@ model:
       point_pillar_scatter:
         num_features: 64
       base_bev_backbone: # backbone will downsample 2x
-        resnet: true
+        resnet: false
         voxel_size: *point_pillar_voxel_size
         layer_nums: [3, 5, 8]
         layer_strides: [2, 2, 2]
