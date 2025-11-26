@@ -62,6 +62,12 @@ python opencood/tools/train_w_delay.py --hypes_yaml ./opencood/hypes_yaml/v2v4re
 python opencood/tools/inference.py  --model_dir ./opencood/logs/your_log_path, --fusion_method intermediate
 ```
 
+#### Main results update
+<div align="left">
+	<img src="images/main_results.png" alt="Visualization of the flow" height="300">
+</div>
+*we noticed that there is a bug for the V2V4Real dataset in our paper, we update the results.
+
 
 ## Acknowlege
 
