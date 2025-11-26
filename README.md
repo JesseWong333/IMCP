@@ -1,4 +1,4 @@
-# Towards Model-Agnostic Cooperative Perception
+# Towards Model-Agnostic Cooperative Perception (IJCNN2025)
 
 Abstract: We introduce IMCP, a robust Intermediate Model-Agnostic Cooperative Perception framework.
 IMCP enables universal agent fusion without the need for joint training or model sharing. 
@@ -49,15 +49,19 @@ please refer to [OpenCOOD](https://github.com/DerrickXuNu/OpenCOOD) for data pre
 
 #### Training
 
+## single agent training
 ``` bash
-# step1: single agent traning, please specify your data path in the yaml file
+# step1: single agent training, please specify your data path in the yaml file
 python opencood/tools/train.py --hypes_yaml ./opencood/hypes_yaml/v2v4real/pointpillar_deformable_attn_coop_single.yaml
-
+```
+After getting the ego agent model and the cooperative model, fill the model path into the cooperative fine-tuning config file.
+## cooperative fine-tuning
+``` bash
 # stage2: cooperative fine-tuning, please specify your data path and the step1 model in the yaml file
 python opencood/tools/train_w_delay.py --hypes_yaml ./opencood/hypes_yaml/v2v4real/pointpillar_deformable_attn_coop_point_pillar_extend_point_pillar.yaml
 ```
 
-#### Evaluatin
+#### Evaluation
 ``` bash
 python opencood/tools/inference.py  --model_dir ./opencood/logs/your_log_path, --fusion_method intermediate
 ```
@@ -72,3 +76,15 @@ python opencood/tools/inference.py  --model_dir ./opencood/logs/your_log_path, -
 ## Acknowlege
 
 This project is impossible without the code of [OpenCOOD](https://github.com/DerrickXuNu/OpenCOOD), [CoAlign](https://github.com/yifanlu0227/CoAlign), [Deformable DETR](https://github.com/fundamentalvision/Deformable-DETR).
+
+## Citation
+```bibtex
+@INPROCEEDINGS{wang2025modelagnostic,
+  title={Towards Model-Agnostic Cooperative Perception}
+  author={Wang, Junjie and Nordstr{\"o}m, Tomas},
+  booktitle={International Joint Conference on Neural Networks (IJCNN)}, 
+  year={2025},
+  organization={IEEE}
+}
+```
+
