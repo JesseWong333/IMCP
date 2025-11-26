@@ -151,8 +151,9 @@ class ModelAgnosticBase(nn.Module):
                 # scales_masks = [F.interpolate(prob.unsqueeze(1), scale_factor=s, mode='nearest') > 0.8 for s in scale_factors]
             
             # downsample
-            # for agent_name, downsamplers in self.downsample_layers.items():
-            #     feature_i =  [ downsampler(f) for f, downsampler in zip(feature_i, downsamplers)]
+            if hasattr(self, 'downsample_layers'):
+                for agent_name, downsamplers in self.downsample_layers.items():
+                    feature_i =  [ downsampler(f) for f, downsampler in zip(feature_i, downsamplers)]
             
             # feature_i = [f * mask for f, mask in zip(feature_i, scales_masks)]
             # feature_i = [f.masked_fill(~mask, 1e-6) for f, mask in zip(feature_i, scales_masks)]

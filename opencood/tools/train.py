@@ -225,7 +225,8 @@ def main():
             else:
                 # supervise_single_flag          
                 final_loss += criterion(ouput_dict, batch_data[cav_id]['label_dict_single'])
-            criterion.logging(epoch, i, len(train_loader))
+            if i % 10 == 0:
+                criterion.logging(epoch, i, len(train_loader))
 
             # back-propagation
             final_loss.backward()
@@ -253,6 +254,8 @@ def main():
                     else:
                         # supervise_single_flag          
                         final_loss += criterion(ouput_dict, batch_data[cav_id]['label_dict_single'])
+                    if i % 10 == 0:
+                        criterion.logging(epoch, i, len(train_loader))
                     criterion.logging(epoch, i, len(train_loader))
                     valid_ave_loss.append(final_loss.item())
 
