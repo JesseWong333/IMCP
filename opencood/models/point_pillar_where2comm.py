@@ -91,7 +91,7 @@ class PointPillarWhere2comm(nn.Module):
         return split_x
 
     def forward(self, data_dict):
-        data_dict = data_dict['ego']
+        # data_dict = data_dict['ego']
         voxel_features = data_dict['processed_lidar']['voxel_features']
         voxel_coords = data_dict['processed_lidar']['voxel_coords']
         voxel_num_points = data_dict['processed_lidar']['voxel_num_points']
