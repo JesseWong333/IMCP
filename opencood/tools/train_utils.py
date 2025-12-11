@@ -61,15 +61,19 @@ def load_saved_model(saved_path, model):
         assert len(file_list) == 1
         print("resuming best validation model at epoch %d" % \
                 eval(file_list[0].split("/")[-1].rstrip(".pth").lstrip("net_epoch_bestval_at")))
-        model.load_state_dict(torch.load(file_list[0] , map_location='cpu'), strict=False)
+        load_results = model.load_state_dict(torch.load(file_list[0] , map_location='cpu'), strict=False)
+        print("unexpected_keys:" + str(load_results.unexpected_keys))
+        print("missing_keys:" + str(load_results.missing_keys))
         return eval(file_list[0].split("/")[-1].rstrip(".pth").lstrip("net_epoch_bestval_at")), model
 
     initial_epoch = findLastCheckpoint(saved_path)
     if initial_epoch > 0:
         print('resuming by loading epoch %d' % initial_epoch)
-        model.load_state_dict(torch.load(
+        load_results = model.load_state_dict(torch.load(
             os.path.join(saved_path,
                          'net_epoch%d.pth' % initial_epoch), map_location='cpu'), strict=False)
+        print("unexpected_keys:" + str(load_results.unexpected_keys))
+        print("missing_keys:" + str(load_results.missing_keys))
 
     return initial_epoch, model
 

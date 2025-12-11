@@ -252,12 +252,6 @@ class DeforEncoderFusion(nn.Module):
             agent_lvl_embeding_dict[agent_name] = nn.Parameter(torch.Tensor(feature_level, self.embed_dims))
             normal_(agent_lvl_embeding_dict[agent_name])
         self.agent_lvl_embeds = nn.ParameterDict(agent_lvl_embeding_dict)
-        # self.level_embeds = nn.Parameter(
-        #     torch.Tensor(3, self.embed_dims))
-        # self.agent_embeds = nn.Parameter(
-        #     torch.Tensor(2, self.embed_dims))
-        # normal_(self.level_embeds)
-        # normal_(self.agent_embeds)
         
         # adapter
         n_adapter_layers =  model_cfg['n_adapters'] if 'n_adapters' in model_cfg else 0
@@ -276,6 +270,16 @@ class DeforEncoderFusion(nn.Module):
             self.return_intermediate = model_cfg['return_intermediate']
         else:
             self.return_intermediate = False
+        
+        if "calibrate" in model_cfg:
+            self.calibrate = model_cfg["calibrate"]
+        else:
+            self.calibrate = False
+        
+        if "train_agent_ID" in model_cfg:
+            self.train_agent_ID = model_cfg["train_agent_ID"]
+        else:
+            self.train_agent_ID = None
 
     # def create_adapter(self, input_filters, output_filters):
     #     adapter_list = []
@@ -314,16 +318,7 @@ class DeforEncoderFusion(nn.Module):
         ref_2d = ref_2d.repeat(bs, 1, 1).unsqueeze(2)
         return ref_2d
     
-    def get_normalized_transformation(self, pairwise_t_matrix_c):
-        # todo: magic number
-        pairwise_t_matrix = pairwise_t_matrix_c.clone() # avoid in-place
-        pairwise_t_matrix = pairwise_t_matrix[:,:,:,[0, 1],:][:,:,:,:,[0, 1, 3]] # [B, L, L, 2, 3]
-        pairwise_t_matrix[...,0,1] = pairwise_t_matrix[...,0,1] * self.bev_h / self.bev_w
-        pairwise_t_matrix[...,1,0] = pairwise_t_matrix[...,1,0] * self.bev_w / self.bev_h
-        pairwise_t_matrix[...,0,2] = pairwise_t_matrix[...,0,2] / (self.discrete_ratio * self.bev_w) * 2
-        pairwise_t_matrix[...,1,2] = pairwise_t_matrix[...,1,2] / (self.discrete_ratio * self.bev_h) * 2
-        return pairwise_t_matrix
-    
+
     @staticmethod
     def quantize_feature_maps(fp_tensor, bitwidth=2):
         scale, zero_point = get_quantization_scale_and_zero_point(fp_tensor, bitwidth)
@@ -346,7 +341,7 @@ class DeforEncoderFusion(nn.Module):
         np.save('./tmp/decoded_feature_.npy', decoded_feature_)
         pass
     
-    def forward(self, mlvl_feats, pairwise_t_matrix, cav_id_list_batch):
+    def forward(self, mlvl_feats, pairwise_t_matrix, cav_id_list_batch, gt_offsets=None, pred_offsets=None):
         # pairwise_t_matrix: # B, cav_id, cav_id, 4, 4
 
         #  这里需要考虑多种情形，包括多种级别的特征，多种类型的特征
@@ -360,8 +355,16 @@ class DeforEncoderFusion(nn.Module):
             quantized_features = [self.quantize_feature_maps_FSQ(non_ego_feature, bitwidth=self.quantize_bit) for non_ego_feature in mlvl_feats[1]]
             mlvl_feats[1] = quantized_features
         
-        pairwise_t_matrix = self.get_normalized_transformation(pairwise_t_matrix)
-
+        if self.calibrate:
+            if pred_offsets is not None:
+                pred_offsets = pred_offsets.clone() # 必须 clone，应为在训练的时候没有 norm
+                pred_offsets[:, :, :, 0] = pred_offsets[:, :, :, 0] / self.bev_w
+                pred_offsets[:, :, :, 1] = pred_offsets[:, :, :, 1] / self.bev_h
+            if gt_offsets is not None:
+                gt_offsets = gt_offsets.clone()
+                gt_offsets[:, :, :, 0] = gt_offsets[:, :, :, 0] / self.bev_w
+                gt_offsets[:, :, :, 1] = gt_offsets[:, :, :, 1] / self.bev_h
+        
         assert len(self.adapters) == len(mlvl_feats)
         # run adapter
         mlvl_feats_out = [ [] for _ in range(len(mlvl_feats))]
@@ -407,8 +410,22 @@ class DeforEncoderFusion(nn.Module):
             feat_flatten = torch.cat(feat_flatten, 1) # 1, h*w+..., C
             ref_2d = self.get_reference_points(
                self.bev_h, self.bev_w, device=feat.device, dtype=feat.dtype) # 1, H*W, 1, 2
-           
-            ref_2d = ref_2d.repeat(1, 1, sum(self.feature_levels), 1)  # #1, H*W, total_feature_lvls, 2
+            
+            if self.calibrate:                            
+                # inference: pred_offsets
+                # train: gt_offsets
+                if list(self.adapters.items())[1][1].training or self.train_agent_ID == -1:
+                    offset = gt_offsets[b:b+1, :, :, :].unsqueeze(3).repeat(1, 1, 1, self.feature_levels[1], 1)
+                else:
+                    offset = pred_offsets[b:b+1, :, :, :].unsqueeze(3).repeat(1, 1, 1, self.feature_levels[1], 1)
+                    
+                ref_2d_calibrate = ref_2d.unsqueeze(2) # 1, H*W, 1, 1, 2 
+                ref_2d_calibrate = ref_2d_calibrate.repeat(1, 1, 1, self.feature_levels[1], 1) # 1, H*W, N-1, self.feature_level, 2
+                ref_2d_calibrate = ref_2d_calibrate + offset
+                ref_2d_calibrate = ref_2d_calibrate.flatten(start_dim=2, end_dim=3) # 1, H*W, (N-1)*self.feature_level, 2 
+                ref_2d = torch.cat([ref_2d.repeat(1, 1, self.feature_levels[1],1), ref_2d_calibrate], dim=2)
+            else:
+                ref_2d = ref_2d.repeat(1, 1, sum(self.feature_levels), 1)  # #1, H*W, total_feature_lvls, 2
 
             spatial_shapes = torch.as_tensor(spatial_shapes, dtype=torch.long, device=feat.device)
 

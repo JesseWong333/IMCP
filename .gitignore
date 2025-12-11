@@ -146,4 +146,7 @@ explogs/
 hpc_log
 hpc_other_log
 run_on_hpc.py
+extract_models.py
 submitit_template.sh
+clean_logs.py
+rename_statedict.py

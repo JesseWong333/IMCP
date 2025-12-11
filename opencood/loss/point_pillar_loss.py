@@ -67,7 +67,7 @@ class PointPillarLoss(nn.Module):
             output_dict[f'reg_preds{suffix}'] = output_dict[f'rm{suffix}']
         if f'dm{suffix}' in output_dict:
             output_dict[f'dir_preds{suffix}'] = output_dict[f'dm{suffix}']
-
+        
         ######### segmentation loss #########
         if 'seg_preds' in output_dict:
             seg_preds = output_dict["seg_preds"] # B, 2, H, W
@@ -78,6 +78,21 @@ class PointPillarLoss(nn.Module):
             return seg_loss
         
         total_loss = 0
+        
+        ######### calibrate loss #########
+        if 'pred_offset' in output_dict:
+            pred_offset = output_dict["pred_offset"] # B, H*W, n_agent, 2
+            target_offset = target_dict['offset']
+            cat_weight_map = torch.ones_like(target_offset)
+            mask = (target_offset == 0)
+            cat_weight_map[mask] = 0.005
+            valid_pixel_num = torch.nonzero(target_offset).size(0) # torch.nonzero: return index
+            loss_map = nn.SmoothL1Loss(reduction='none')(pred_offset, target_offset)
+            offset_loss = torch.sum(loss_map * cat_weight_map) / (valid_pixel_num + 1)
+
+            total_loss += offset_loss
+            self.loss_dict.update({'offset_loss': offset_loss.item()})
+            # return offset_loss
 
         # cls loss
         cls_preds = output_dict[f'cls_preds{suffix}'].permute(0, 2, 3, 1).contiguous() \
@@ -223,12 +238,13 @@ class PointPillarLoss(nn.Module):
         dir_loss = self.loss_dict.get('dir_loss', 0)
         iou_loss = self.loss_dict.get('iou_loss', 0)
         seg_loss = self.loss_dict.get('seg_loss', 0)
+        offset_loss = self.loss_dict.get('offset_loss', 0)
 
 
         print("[epoch %d][%d/%d]%s || Loss: %.4f || Conf Loss: %.4f"
-              " || Loc Loss: %.4f || Dir Loss: %.4f || IoU Loss: %.4f || Seg Loss: %.4f" % (
+              " || Loc Loss: %.4f || Dir Loss: %.4f || IoU Loss: %.4f || Seg Loss: %.4f || Offset Loss: %.4f " %  (
                   epoch, batch_id + 1, batch_len, suffix,
-                  total_loss, cls_loss, reg_loss, dir_loss, iou_loss, seg_loss))
+                  total_loss, cls_loss, reg_loss, dir_loss, iou_loss, seg_loss, offset_loss))
 
         if not writer is None:
             writer.add_scalar('Regression_loss'+suffix, reg_loss,

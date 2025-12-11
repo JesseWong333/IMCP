@@ -157,7 +157,17 @@ def getAgnosticFusionDataset(cls):
                     lidar_proj_np = copy.deepcopy(lidar_np)
                     lidar_proj_np[:,:3] = projected_lidar
                     selected_cav_processed.update({'projected_lidar': lidar_proj_np})
-    
+                
+            # load past frames
+            if 'lidar_np_history' in selected_cav_base:
+                lidar_np_history_l = selected_cav_base['lidar_np_history']
+                lidar_np_history_l = [shuffle_points(lidar) for lidar in lidar_np_history_l]
+                processed_lidar_history_l = [self.pre_processor_i.preprocess(lidar) for lidar in lidar_np_history_l]
+                history_lidar_l = merge_features_to_dict(processed_lidar_history_l)
+                history_lidar_collated = self.pre_processor_i.collate_batch(history_lidar_l)
+                selected_cav_processed.update({'processed_lidar_history': history_lidar_collated})
+                selected_cav_processed.update({'time_delay': selected_cav_base['time_delay']}) 
+
             # generate targets label single GT, note the reference pose is itself.
             object_bbx_center_single, object_bbx_mask_single, object_ids_single = self.generate_object_center_single(
                 [selected_cav_base], selected_cav_base['params']['lidar_pose']
@@ -175,7 +185,7 @@ def getAgnosticFusionDataset(cls):
                 else:
                     processed_lidar = self.pre_processor_i.preprocess(lidar_np)
                 selected_cav_processed.update({'processed_features': processed_lidar})
-        
+                
             if cav_id == 0:
                 label_dict_single = self.post_processor_v.generate_label(
                     gt_box_center=object_bbx_center_single, anchors=self.anchor_box_v, mask=object_bbx_mask_single
@@ -398,6 +408,12 @@ def getAgnosticFusionDataset(cls):
                     # processed_features.append(
                     #     selected_cav_processed['processed_features'])
                     processed_data_dict[cav_id]['processed_lidar'] = selected_cav_processed['processed_features']
+                    if "processed_lidar_history" in selected_cav_processed:
+                        processed_data_dict[cav_id]['processed_lidar_history'] = selected_cav_processed['processed_lidar_history']
+                        processed_data_dict[cav_id]['time_delay'] = selected_cav_processed['time_delay']
+                    if "offset" in selected_cav_base["params"]:
+                        processed_data_dict[cav_id].update({"offset": selected_cav_base["params"]["offset"]})
+                          
                 if self.load_camera_file:
                     # agents_image_inputs.append(
                     #     selected_cav_processed['image_inputs'])
@@ -418,17 +434,6 @@ def getAgnosticFusionDataset(cls):
                     processed_data_dict[cav_id]['transformation_matrix'] = selected_cav_processed['transformation_matrix']
                     processed_data_dict[cav_id]['anchor_box'] = selected_cav_processed['anchor_box']
                     processed_data_dict[cav_id]['single_seg_label'] = torch.from_numpy(selected_cav_processed['single_seg_label']).unsqueeze(0) if selected_cav_processed['single_seg_label'] is not None else None
-
-            # generate single view GT label
-            # if self.supervise_single:
-            #     single_label_dicts = self.post_processor.collate_batch(single_label_list)
-            #     single_object_bbx_center = torch.from_numpy(np.array(single_object_bbx_center_list))
-            #     single_object_bbx_mask = torch.from_numpy(np.array(single_object_bbx_mask_list))
-            #     processed_data_dict['ego'].update({
-            #         "single_label_dict_torch": single_label_dicts,
-            #         "single_object_bbx_center_torch": single_object_bbx_center,
-            #         "single_object_bbx_mask_torch": single_object_bbx_mask,
-            #         })
 
             # exclude all repetitive objects    
             unique_indices = \
@@ -500,12 +505,9 @@ def getAgnosticFusionDataset(cls):
             # pairwise transformation matrix
             pairwise_t_matrix_list = []
 
-            # disconet
-            teacher_processed_lidar_list = []
-            
             processed_lidar_list = {cav_id:[] for cav_id in batch[0] if cav_id != 'ego'}
             image_inputs_list = {cav_id:[] for cav_id in batch[0] if cav_id != 'ego'}
-            ### 2022.10.10 single gt ####
+            
             if self.supervise_single:
                 pos_equal_one_single = {cav_id:[] for cav_id in batch[0] if cav_id != 'ego'}
                 neg_equal_one_single = {cav_id:[] for cav_id in batch[0] if cav_id != 'ego'}
@@ -514,6 +516,11 @@ def getAgnosticFusionDataset(cls):
                 object_bbx_mask_single = {cav_id:[] for cav_id in batch[0] if cav_id != 'ego'}
                 object_ids_single = {cav_id:[] for cav_id in batch[0] if cav_id != 'ego'}
                 object_seg_label_single = {cav_id:[] for cav_id in batch[0] if cav_id != 'ego'}
+            
+            if self.load_history:    
+                offset = {cav_id:[] for cav_id in batch[0] if cav_id != 'ego'}
+                time_delay = {cav_id:[] for cav_id in batch[0] if cav_id != 'ego'}
+                lidar_history = {cav_id:[] for cav_id in batch[0] if cav_id != 'ego'}
 
             for i in range(len(batch)):
                 ego_dict = batch[i].pop('ego')
@@ -535,9 +542,6 @@ def getAgnosticFusionDataset(cls):
                 if self.visualize:
                     origin_lidar.append(ego_dict['origin_lidar'])
 
-                if self.kd_flag:
-                    teacher_processed_lidar_list.append(ego_dict['teacher_processed_lidar'])
-
                 for cav_id, instance_dict in batch[i].items():
                     if self.load_lidar_file:
                         processed_lidar_list[cav_id].append(instance_dict['processed_lidar'])
@@ -553,6 +557,11 @@ def getAgnosticFusionDataset(cls):
                         object_ids_single[cav_id].append(instance_dict['single_object_ids'])
                         if instance_dict['single_seg_label'] is not None:
                             object_seg_label_single[cav_id].append(instance_dict['single_seg_label'])
+                    
+                    if self.load_history:
+                        offset[cav_id].append(instance_dict['offset']) if 'offset' in instance_dict else None
+                        time_delay[cav_id].append(instance_dict['time_delay']) if 'time_delay' in instance_dict else None
+                        lidar_history[cav_id].append(instance_dict['processed_lidar_history']) if 'processed_lidar_history' in instance_dict else None
 
             # convert to numpy, (B, max_num, 7)
             object_bbx_center = torch.from_numpy(np.array(object_bbx_center))
@@ -613,11 +622,6 @@ def getAgnosticFusionDataset(cls):
                 origin_lidar = torch.from_numpy(origin_lidar)
                 output_dict['ego'].update({'origin_lidar': origin_lidar})
 
-            if self.kd_flag:
-                teacher_processed_lidar_torch_dict = \
-                    self.pre_processor.collate_batch(teacher_processed_lidar_list)
-                output_dict['ego'].update({'teacher_processed_lidar':teacher_processed_lidar_torch_dict})
-
             if self.supervise_single:
                 for cav_id in batch[0]:
                     output_dict[cav_id].update({
@@ -635,6 +639,12 @@ def getAgnosticFusionDataset(cls):
                         "object_bbx_mask_single": torch.cat(object_bbx_mask_single[cav_id], dim=0),
                         "object_ids_single": object_ids_single[cav_id][0]
                     })
+                    
+            if self.load_history:
+                for cav_id in batch[0]:
+                    output_dict[cav_id]["offset"] = torch.cat((offset[cav_id]), dim=0) if len(offset[cav_id]) > 0 else None
+                    output_dict[cav_id]["time_delay"] = torch.tensor((time_delay[cav_id])) if len(time_delay[cav_id]) > 0 else None
+                    output_dict[cav_id]["processed_lidar_history"] = lidar_history[cav_id] # still a list
 
             return output_dict
 

@@ -369,12 +369,12 @@ class VoxelPostprocessor(BasePostprocessor):
         # predicted 3d bbx
         pred_box3d_tensor = torch.vstack(pred_box3d_list)
         # remove large bbx 
-        # keep_index_1 = box_utils.remove_large_pred_bbx(pred_box3d_tensor)
-        # keep_index_2 = box_utils.remove_bbx_abnormal_z(pred_box3d_tensor)
-        # keep_index = torch.logical_and(keep_index_1, keep_index_2)
+        keep_index_1 = box_utils.remove_large_pred_bbx(pred_box3d_tensor)
+        keep_index_2 = box_utils.remove_bbx_abnormal_z(pred_box3d_tensor)
+        keep_index = torch.logical_and(keep_index_1, keep_index_2)
 
-        # pred_box3d_tensor = pred_box3d_tensor[keep_index]
-        # scores = scores[keep_index]
+        pred_box3d_tensor = pred_box3d_tensor[keep_index]
+        scores = scores[keep_index]
 
         # STEP3
         # nms

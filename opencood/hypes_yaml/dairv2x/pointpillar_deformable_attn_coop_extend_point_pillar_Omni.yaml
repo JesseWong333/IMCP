@@ -1,4 +1,4 @@
-name: pointpillar_pointpillar_adapter_0
+name: dairv2x_pointpillar_pointpillar_Omni_1bit
 data_dir: "/hd_cache/datasets/DAIR-V2X/cooperative-vehicle-infrastructure"
 root_dir: "/data/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/train.json"
 validate_dir: "/data/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/val.json"
@@ -9,16 +9,19 @@ test_dir: "/data/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/val.json"
 # test_dir: "/mimer/NOBACKUP/groups/junjie_storage/datasets/DAIR-V2X/cooperative-vehicle-infrastructure/val.json"
 
 # 这种情况创建supernet去训练, point_pillar是一种配置， second是一种配置
-load_history: false
+load_history: True
+time_delay: 5  # max time delay
+delay_sampling: "exponential"  # "uniform" or "exponential"
 bev_h: &bev_h 100
 bev_w: &bev_w 252
+history_frame: &history_frame 5
+
 train_agent_ID: &train_agent_ID -1  # -1为协同训练，0,1,2为各自的ID； 0是ego, 1是infra
 
 method_v: &method_v point_pillar
 method_i: &method_i point_pillar
 
-# method_v_path: ./opencood/logs/v_point_pillar_2024_08_01_17_43_01/net_epoch_bestval_at13.pth
-method_ego_path: ./opencood/logs/ego_pointpillar_2024_08_13_13_06_12/net_epoch_bestval_at13.pth
+method_ego_path: ./opencood/logs/dairv2x_pointpillar_pointpillar_flow_module_training_2025_12_09_23_56_01/net_epoch_bestval_at15ego.pth  # 包含 flow模型，且已经进行 flow 微调
 method_i_path: ./opencood/logs/i_point_pillar_2024_08_01_17_41_50/net_epoch_bestval_at15.pth
 
 noise_setting:
@@ -44,7 +47,7 @@ comm_range: 1000
 
 fusion:
   core_method: 'agnostic'
-  dataset: 'dairv2x'
+  dataset: 'dairv2x_w_delay'
   args: 
     proj_first: false
 
@@ -145,6 +148,21 @@ model:
 
     supervise_single: true
 
+    calibrate: &calibrate true
+    meta_flow:
+      embed_dims: 128
+      n_frame: *history_frame
+      block_cfgs:
+        [[128, 8, 8, 8, 8, 0.1, 1, *history_frame, ["cross_attn", "norm", "ffn", "norm", 
+                                        "cross_attn", "norm", "ffn", "norm"]],
+          [128, 8, 8, 8, 8, 0.1, 1, *history_frame, ["self_attn", "norm", "ffn", "norm"] ]
+        ]
+      backbone: 
+        upsample_strides: [1, 2, 4]
+        num_levels: 3
+        num_filters: [128, 128, 128]
+        num_upsample_filters: [128, 128, 128]
+        embed_dims: 128
     # define which method
     # Method 1: points pillar
     point_pillar:
@@ -162,7 +180,7 @@ model:
       point_pillar_scatter:
         num_features: 64
       base_bev_backbone: # backbone will downsample 2x
-        resnet: true
+        resnet: false
         voxel_size: *point_pillar_voxel_size
         layer_nums: [3, 5, 8]
         layer_strides: [2, 2, 2]
@@ -197,6 +215,12 @@ model:
         dim: [ 128 ]
         input_dim: 128 
 
+    # downsample
+    dynamic_conv_channel: [8, 4, 2, 1]
+    n_downsample: 6
+    downsampler: 
+        point_pillar_v: [[64, 128, 256], [1, 1, 1]]
+
     # Fusion method
     # defor_encoder_fusion: 
     #   bev_h: *bev_h
@@ -225,20 +249,23 @@ model:
     #   head_embed_dims: *embed_dims
     
     defor_encoder_fusion: 
+      calibrate: *calibrate
+      train_agent_ID: *train_agent_ID
       bev_h: *bev_h
       bev_w: *bev_w
       discrete_ratio: 0.8
       embed_dims: &embed_dims 128 # 128 for multi-scale; 384 for single scale
       max_num_agent: *max_cav
-      agent_names: &agent_names ["ego"]
-      feature_levels: &feature_levels [3]
+      agent_names: &agent_names ["ego", "point_pillar_v"]
+      feature_levels: &feature_levels [3, 3]
       lora_rank: 0
       anchor_number: 2
       # adapter parameters
-      n_adapters: 0
+      quantize_bit: 1
+      n_adapters: 6
       adapters: 
         ego: [[64, 128, 256], [128, 128, 128]]
-        # point_pillar_v: [[64, 128, 256], [128, 128, 128]]
+        point_pillar_v: [[1, 1, 1], [128, 128, 128]]
         # second: [[128], [128]]     
 
       # cross first
@@ -273,7 +300,7 @@ loss:
 
 optimizer:
   core_method: Adam
-  lr: 0.002
+  lr: 0.002 
   args:
     eps: 1e-10
     weight_decay: 1e-4

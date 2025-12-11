@@ -44,10 +44,6 @@ def main():
     assert opt.fusion_method in ['late', 'early', 'intermediate', 'no', 'no_w_uncertainty', 'single'] 
 
     hypes = yaml_utils.load_yaml(None, opt)
-    
-    hypes['load_history'] = True
-    hypes["history_frame"] = 5
-    hypes['fusion']['dataset'] = 'dairv2xWdelay'
 
     # if 'heter' in hypes:
     #     x_min, x_max = -140.8, 140.8
@@ -124,7 +120,7 @@ def main():
                                 num_workers=4,
                                 collate_fn=opencood_dataset.collate_batch_test,
                                 shuffle=False,
-                                pin_memory=False,
+                                pin_memory=True,
                                 drop_last=False,)
         val_loaders.append(val_loader)
     
@@ -230,14 +226,14 @@ def main():
                     #                     method='3d',
                     #                     left_hand=left_hand)
                     
-                    # vis_save_path = os.path.join(vis_save_path_root, 'bev_%05d.png' % i)
-                    # simple_vis.visualize(infer_result,
-                    #                     batch_data['ego'][
-                    #                         'origin_lidar'][0],
-                    #                     hypes['postprocess']['gt_range'],
-                    #                     vis_save_path,
-                    #                     method='bev',
-                    #                     left_hand=left_hand)
+                    vis_save_path = os.path.join(vis_save_path_root, 'bev_%05d.png' % i)
+                    simple_vis.visualize(infer_result,
+                                        batch_data['ego'][
+                                            'origin_lidar'][0],
+                                        hypes[hypes['method_v']]['postprocess']['gt_range'],
+                                        vis_save_path,
+                                        method='bev',
+                                        left_hand=left_hand)
             torch.cuda.empty_cache()
 
         ap30, ap50, ap70 = eval_utils.eval_final_results(result_stat,

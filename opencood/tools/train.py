@@ -145,6 +145,56 @@ def main():
         print("number of parameters tuned: {}".format(sum([c.numel() for c in params])))
         optimizer = train_utils.setup_optimizer(hypes, params)
 
+    elif hypes['train_agent_ID'] == -5:
+        model_dict = torch.load(hypes['model_path'])
+        load_results = model.load_state_dict(model_dict, strict=False)
+        print("load unexpected_keys:" + str(load_results.unexpected_keys))
+        for name, value in model.named_parameters():
+            if 'meta_flow' in name:
+                value.requires_grad = True
+                print(name)
+            else:
+                value.requires_grad = False
+        # setup optimizer
+        params = filter(lambda p: p.requires_grad, model.parameters())
+        # print("number of parameters tuned: {}".format(sum([c.numel() for c in params])))
+        optimizer = train_utils.setup_optimizer(hypes, params)
+    
+    elif hypes['train_agent_ID'] == -6:
+        model_dict = torch.load(hypes['model_path'])
+        load_results = model.load_state_dict(model_dict, strict=False)
+        print("load unexpected_keys:" + str(load_results.unexpected_keys))
+        extra_agent_name = hypes['model']['args']['defor_encoder_fusion']['agent_names'][1]
+        
+        for name, value in model.named_parameters():
+            # if extra_agent_name in name and ('adapters' not in name) and ('downsample_layers' not in name):
+            if "model_fusion" in name or 'adapters' in name or 'downsample_layers' in name:
+                value.requires_grad = True
+                print(name)
+            else:
+                value.requires_grad = False
+        # setup optimizer
+        params = filter(lambda p: p.requires_grad, model.parameters())
+        # print("number of parameters tuned: {}".format(sum([c.numel() for c in params])))
+        optimizer = train_utils.setup_optimizer(hypes, params)
+        
+    elif hypes['train_agent_ID'] == -7:
+        model_dict = torch.load(hypes['stage1_model'])
+        load_results = model.load_state_dict(model_dict, strict=False)
+        print("load unexpected_keys:" + str(load_results.unexpected_keys))
+        
+        for name, value in model.named_parameters():
+            if 'flow_adapter' in name:
+                value.requires_grad = True
+                print(name)
+            else:
+                value.requires_grad = False
+        # setup optimizer
+        params = filter(lambda p: p.requires_grad, model.parameters())
+        # print("number of parameters tuned: {}".format(sum([c.numel() for c in params])))
+        optimizer = train_utils.setup_optimizer(hypes, params)
+
+
     # record lowest validation loss checkpoint.
     lowest_val_loss = 1e5
     lowest_val_epoch = -1
@@ -191,6 +241,7 @@ def main():
         cav_id = hypes['train_agent_ID']
         # the model will be evaluation mode during validation 
         model.train()
+
         if cav_id == -1 or cav_id == -3:
             model.eval()  # we call eval(), just to avoid the norm layer update
             extra_agent_name = hypes['model']['args']['defor_encoder_fusion']['agent_names'][1]
@@ -199,7 +250,27 @@ def main():
                 if extra_agent_name in name:
                     # print(name)
                     module.train()
-
+                    
+        if cav_id == -5:
+            model.eval() 
+            for name, module in model.named_modules():
+                if "meta_flow" in name:
+                    # print(name)
+                    module.train()
+        
+        if cav_id == -6:
+            model.eval() 
+            extra_agent_name = hypes['model']['args']['defor_encoder_fusion']['agent_names'][1]
+            for name, module in model.named_modules():
+                if "model_fusion" in name or 'adapters' in name or 'downsample_layers' in name:
+                    module.train()
+        
+        if cav_id == -7:
+            model.eval() 
+            for name, module in model.named_modules():
+                if "flow_adapter" in name:
+                    module.train()
+                    
         # randomly set dynamic conv channel
         # if epoch % 10 == 0:
         # set_dynamic_conv_channel(model, hypes['model']['args']['dynamic_conv_channel'][epoch//10])
@@ -303,7 +374,7 @@ def main():
         if 'noise_setting' in hypes and hypes['noise_setting']['add_noise']:
             cmd = f"python opencood/tools/inference_w_noise.py --model_dir {saved_path} --fusion_method {fusion_method}"
         else:
-            cmd = f"/hd_cache/users/junjie/software/miniconda3/envs/Where2comm/bin/python opencood/tools/inference.py --model_dir {saved_path} --fusion_method {fusion_method}"
+            cmd = f"/hd_cache/users/junjie/software/miniconda3/envs/Where2comm/bin/python opencood/tools/inference_w_delay.py --model_dir {saved_path} --fusion_method {fusion_method}"
         print(f"Running command: {cmd}")
         os.system(cmd)
 

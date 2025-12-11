@@ -19,7 +19,7 @@ from opencood.utils.transformation_utils import inf_side_rot_and_trans_to_trasnf
 from opencood.data_utils.pre_processor import build_preprocessor
 from opencood.data_utils.post_processor import build_postprocessor
 
-class DAIRV2XWDELAYBaseDataset(Dataset):
+class DAIRV2X_W_DELAYBaseDataset(Dataset):
     def __init__(self, params, visualize, train=True):
         self.params = params
         self.visualize = visualize
@@ -92,8 +92,8 @@ class DAIRV2XWDELAYBaseDataset(Dataset):
         else:
             self.load_history = False
 
-        if "train_stage" in self.params:
-            self.train_stage = self.params["train_stage"]
+        if "delay_sampling" in self.params:
+            self.delay_sampling = self.params["delay_sampling"]
 
         if "history_frame" in self.params:
             self.history_frame = self.params["history_frame"] 
@@ -245,12 +245,14 @@ class DAIRV2XWDELAYBaseDataset(Dataset):
             max_trial = 5
             for _ in range(max_trial): 
                 # 有可能当前的帧全部不满足 todo
-                if self.train_stage == "stage1":
+                if self.delay_sampling == "exponential":
                     time_index = np.floor(np.random.exponential(scale=2.0)).astype(np.int32) # 均值为2
                     if time_index > self.max_time_delay:
                         time_index = self.max_time_delay
-                else:
+                elif self.delay_sampling == "uniform":
                     time_index = random.randint(0, self.max_time_delay) # 随机在最大time_delay中选一帧
+                else:
+                    raise NotImplementedError
                 history_index_list = [index for index in range(time_index, time_index + self.history_frame)] # a list of size, history_frame
 
                 if is_track_frame_exits(time_index + self.history_frame): # 要求每一帧都在，不能缺帧
