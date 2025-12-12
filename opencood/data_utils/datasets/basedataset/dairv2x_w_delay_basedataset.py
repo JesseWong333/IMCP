@@ -62,7 +62,7 @@ class DAIRV2X_W_DELAYBaseDataset(Dataset):
                                                     else self.generate_object_center_camera
 
         if self.load_camera_file:
-            self.data_aug_conf = params["fusion"]["args"]["data_aug_conf"]
+            self.data_aug_conf = params["camera_data_aug_conf"]
 
         if self.train:
             split_dir = params['root_dir']

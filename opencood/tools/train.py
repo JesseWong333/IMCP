@@ -87,7 +87,7 @@ def main():
         print("tuning parameters:")
         for name, value in model.named_parameters():
             # only tune Lora and paeameters assiaated with agent_names
-            if 'lora_' in name or extra_agent_name in name:
+            if 'flow_adapter' in name or extra_agent_name in name:
                 value.requires_grad = True
                 print(name)
             else:
@@ -247,7 +247,7 @@ def main():
             extra_agent_name = hypes['model']['args']['defor_encoder_fusion']['agent_names'][1]
             # print("module to train:")
             for name, module in model.named_modules():
-                if extra_agent_name in name:
+                if 'flow_adapter' in name or extra_agent_name in name:
                     # print(name)
                     module.train()
                     

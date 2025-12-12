@@ -423,7 +423,7 @@ class DeforEncoderFusion(nn.Module):
                 ref_2d_calibrate = ref_2d_calibrate.repeat(1, 1, 1, self.feature_levels[1], 1) # 1, H*W, N-1, self.feature_level, 2
                 ref_2d_calibrate = ref_2d_calibrate + offset
                 ref_2d_calibrate = ref_2d_calibrate.flatten(start_dim=2, end_dim=3) # 1, H*W, (N-1)*self.feature_level, 2 
-                ref_2d = torch.cat([ref_2d.repeat(1, 1, self.feature_levels[1],1), ref_2d_calibrate], dim=2)
+                ref_2d = torch.cat([ref_2d.repeat(1, 1, self.feature_levels[0],1), ref_2d_calibrate], dim=2)
             else:
                 ref_2d = ref_2d.repeat(1, 1, sum(self.feature_levels), 1)  # #1, H*W, total_feature_lvls, 2
 

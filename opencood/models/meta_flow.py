@@ -63,7 +63,7 @@ def convrelu(in_channels, out_channels, kernel_size=3, stride=1, padding=1, dila
 def deconv(in_planes, out_planes, kernel_size=4, stride=2, padding=1):
     return nn.ConvTranspose2d(in_planes, out_planes, kernel_size, stride, padding, bias=True)
 
-class CNNBackbone(nn.Module):
+class MultiScaleFlowAdapter(nn.Module):
     def __init__(self, args):
         super().__init__()
         
@@ -110,11 +110,43 @@ class CNNBackbone(nn.Module):
         x = x.view(b, t, 128, h1, w1)
         return x
 
+class SingleFlowAdapter(nn.Module):
+    def __init__(self, args):
+        super().__init__()
+        self.deblocks = nn.ModuleList()
+        upsample_strides = args['upsample_strides']
+        num_filters = args['num_filters']
+        num_upsample_filters = args['num_upsample_filters']
+        embed_dims = args['embed_dims']
+        
+        self.deblocks = nn.Sequential(
+                    nn.ConvTranspose2d(
+                        num_filters, num_upsample_filters,
+                        upsample_strides,
+                        stride=upsample_strides, bias=False
+                    ),
+                    nn.BatchNorm2d(num_upsample_filters,
+                                    eps=1e-3, momentum=0.01),
+                    nn.ReLU()
+                )
+        self.shrink_conv = nn.Sequential(
+                    nn.Conv2d(embed_dims, embed_dims, kernel_size=1),  # we use the same size filters as the privious upsample filters
+                    nn.BatchNorm2d(embed_dims)
+                )
+    def forward(self, x):
+        assert len(x) == 1
+        x = x[0]
+        b, t, c, h, w = x.shape
+        x = self.deblocks(x.view(b*t,c,h,w))
+        x = self.shrink_conv(x) 
+        x = x.view(b, t, 128, h, w)
+        return x
+
 class MetaFlow(nn.Module):
 
     def __init__(self, args):
         super().__init__()
-        self.encoder = CNNBackbone(args['backbone'])
+        # self.encoder = CNNBackbone(args['backbone'])
 
         self.bev_h = 100
         self.bev_w = 252
@@ -164,9 +196,9 @@ class MetaFlow(nn.Module):
         ref_2d = ref_2d.repeat(bs, 1, 1).unsqueeze(2)
         return ref_2d
         
-    def forward(self, x, time):
+    def forward(self, xx, time):
         # time: N
-        xx = self.encoder(x) # N, C, H, W
+        # xx = self.encoder(x) # B, N, C, H, W
         B, N, C, H, W = xx.shape
         mulframe_feats = torch.chunk(xx, chunks=N, dim=1)
         feat_flatten = []

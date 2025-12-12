@@ -10,9 +10,8 @@ from opencood.models.sub_modules.dynamic_layers import DynamicConv2d, DynamicBat
 
 from opencood.models.sub_modules.base_single_module import PointPillar, Second, DeforEncoderFusion
 from opencood.models.lift_splat_shoot import LiftSplatShoot
-from opencood.models.meta_flow import MetaFlow
+from opencood.models.meta_flow import MetaFlow, SingleFlowAdapter, MultiScaleFlowAdapter
 from opencood.models.sub_modules.torch_transformation_utils import warp_affine_simple
-from opencood.models.sub_modules.base_single_module import Adapter as FlowAdapter
 
 import loralib as lora
 
@@ -79,13 +78,10 @@ class ModelAgnosticBase(nn.Module):
             self.calibrate = True
             # create calibrate model
             self.meta_flow = MetaFlow(args['meta_flow'])
-                
-            # input_filters = args['flow_adapter'][0]
-            # output_filters = args['flow_adapter'][1]
-            # adapter_list = []
-            # for i in range(len(input_filters)):
-            #     adapter_list.append(FlowAdapter(input_filters[i], output_filters[i], args['n_flow_adapter_layers'], 0))
-            # self.flow_adapter = nn.ModuleList(adapter_list)
+            if args['flow_adapter']['type'] == 'multi_scale':
+                self.flow_adapter = MultiScaleFlowAdapter(args['flow_adapter'])
+            elif args['flow_adapter']['type'] == 'single_scale':
+                self.flow_adapter = SingleFlowAdapter(args['flow_adapter'])
         else:
             self.calibrate = False
         self.bev_h = args['defor_encoder_fusion']['bev_h']
@@ -175,6 +171,7 @@ class ModelAgnosticBase(nn.Module):
                 multiscale_features[i].append(T_frame_features[i].unsqueeze(0))
         multiscale_features = [ torch.cat(x, dim=0) for x in multiscale_features] # [ (b, t, c0, h0, w0), (b, t, c1, h1, w1), (b, t, c2, h2, w2) ]
         
+        multiscale_features = self.flow_adapter(multiscale_features)
         pred_offset = self.meta_flow(multiscale_features, time_delay) # b, h, w, 2
         pred_offsets = pred_offset.flatten(start_dim=1, end_dim=2).unsqueeze(2) # b, hw, 1, 2
         return pred_offsets
